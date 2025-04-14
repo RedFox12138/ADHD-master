@@ -75,7 +75,7 @@ def compute_band_powers(data):
 
 
 # 加载数据
-eeg = np.loadtxt('data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0414 XY额头干电极3min 1.txt')
+eeg = np.loadtxt('data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0411 XY额头干电极3min 2.txt')
 fs = 250  # 采样率
 
 

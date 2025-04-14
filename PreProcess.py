@@ -22,27 +22,27 @@ plt.switch_backend('TkAgg')
 
 
 # 预处理函数
-# def preprocess1(OriginalSignal, fs=250):
-#     # out = input.shape[0]
-#     # step1: 滤波
-#     d1 = OriginalSignal
-#     b, a = signal.butter(6, 0.5 / (fs / 2), 'highpass')  # 0.5Hz 高通巴特沃斯滤波器
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, [49 / (fs / 2), 51 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, [99 / (fs / 2), 101 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, 40/ (fs / 2), 'lowpass')  # 100Hz 低通
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     theta_band = [4,8]
-#     beta_band = [13,30]
-#     power_ratio = compute_power_ratio(d1, fs, theta_band, beta_band)
-#
-#     return d1,power_ratio
+def preprocess1(OriginalSignal, fs=250):
+    # out = input.shape[0]
+    # step1: 滤波
+    d1 = OriginalSignal
+    b, a = signal.butter(6, 0.5 / (fs / 2), 'highpass')  # 0.5Hz 高通巴特沃斯滤波器
+    d1 = signal.filtfilt(b, a, d1)
+
+    b, a = signal.butter(6, [49 / (fs / 2), 51 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
+    d1 = signal.filtfilt(b, a, d1)
+
+    b, a = signal.butter(6, [99 / (fs / 2), 101 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
+    d1 = signal.filtfilt(b, a, d1)
+
+    b, a = signal.butter(6, 40/ (fs / 2), 'lowpass')  # 100Hz 低通
+    d1 = signal.filtfilt(b, a, d1)
+
+    theta_band = [4,8]
+    beta_band = [13,30]
+    power_ratio = compute_power_ratio(d1, fs, theta_band, beta_band)
+
+    return d1,power_ratio
 
 
 
