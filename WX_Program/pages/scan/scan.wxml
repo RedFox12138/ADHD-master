@@ -1,0 +1,25 @@
+<view class="container">
+  <view class="status-bar">
+    搜索状态：{{discovering ? '正在搜索...' : '已停止'}}
+  </view>
+
+  <view wx:if="{{devices.length}}" class="device-list">
+    <view 
+      wx:for="{{devices}}"
+      wx:key="deviceId"
+      class="device-item {{connectedId === item.deviceId ? 'connected' : ''}}"
+      bindtap="connectDevice"
+      data-device="{{item}}"
+    >
+      <text class="name">{{item.name || '未知设备'}}</text>
+      <text class="signal">信号强度: {{item.RSSI}}dBm</text>
+      <text class="id">{{item.deviceId}}</text>
+    </view>
+  </view>
+
+  <view wx:else class="empty">
+    未发现蓝牙设备，请确保：
+    <text>1. 设备已开启蓝牙并处于可发现模式</text>
+    <text>2. 手机已开启位置服务（Android需要）</text>
+  </view>
+</view>

@@ -1,0 +1,46 @@
+<view class="container">
+  <view class="status">
+    连接状态：{{connected ? '已连接' + deviceName : '未连接'}}
+  </view>
+
+  <!-- 显示参数变化 -->
+  <view class="parameter">
+    Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}
+  </view>
+  
+  <view class="experiment-info" wx:if="{{experimentStarted}}">
+  <view>实验阶段：{{currentPhase}}</view>
+  <view>剩余时间：{{remainingTime}}秒</view>
+  <!-- <view wx:if="{{baselineValue !== null}}">基准值：{{baselineValue}}</view> -->
+  <view>基准值：{{baselineValue !== null ? baselineValue: '计算中'}}</view>
+  <view>当前注意力：{{currentAttention !== null ? currentAttention: '计算中'}}</view>
+</view>
+
+  <canvas class="canvas" canvas-id="EEG" binderror="canvasIdErrorCallback" disable-scroll='true'></canvas>
+  
+  <!-- 游戏区域 -->
+  <view class="game-area" wx:if="{{experimentStarted && currentPhase === '治疗阶段'}}">
+    <view class="house" style="height: {{houseHeight}}px; width: {{houseWidth}}px; background-color: #8B4513;"></view>
+    <view class="roof" style="border-bottom: {{roofHeight}}px solid #FF6347; border-left: {{roofWidth/2}}px solid transparent; border-right: {{roofWidth/2}}px solid transparent;"></view>
+  </view>
+  
+  <!-- 保留原有的输入和发送数据功能 -->
+  <input 
+    class="input" 
+    placeholder="请输入十六进制数据（如：A1B2C3）" 
+    bindinput="handleInput" 
+    value="{{inputData}}"
+  />
+  
+  <button class="btn" bindtap="sendData">
+    发送数据
+  </button>
+  
+  <button class="btn" bindtap="startExperiment" wx:if="{{!experimentStarted}}">
+    开始实验
+  </button>
+  
+  <button class="btn" bindtap="navigateToScan">
+    {{connected ? '重新连接' : '搜索设备'}}
+  </button>
+</view>
