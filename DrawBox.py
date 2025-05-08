@@ -4,7 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
 
-from PreProcess import compute_power_ratio
+from CeemdanWave import ceemdan_eeg_artifact_removal
+from PlotFreq import PlotFreq
+from PreProcess import compute_power_ratio, preprocess, compute_power_ratio2, preprocess3, preprocess1
+from SingleDenoise_pro import remove_eog_with_visualization2
 
 # Get patient and healthy files
 # patient_files = glob.glob('D:/Matlab/bin/Ning/Prj_DATA/ADHD/*.mat')  # Note forward slashes for Python
@@ -92,48 +95,80 @@ from PreProcess import compute_power_ratio
 
 
 # Define file path (assuming single file now)
-data_file = 'data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0409 XY额头干电极3min 1.txt'  # Or .mat if still using mat files
+data_file = 'data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0417/0417 XY头顶风景画移动+心算1.txt'
+eeg_data = np.loadtxt(data_file)
 
-# Define sampling rate and window parameters
-Fs = 250  # Sampling rate 100Hz
-window_length = 2 * Fs  # 2-second window (200 samples)
-overlap = window_length  # Half overlap
+# 参数设置
+Fs = 250
+window_length = 2 * Fs
+overlap = window_length   # 50%重叠
 
-# Band definitions
-theta_band = [4, 8]  # Theta band 4-8Hz
-beta_band = [13, 21]  # Beta band 13-21Hz
+# 频段定义
+theta_band = [4, 8]
+alpha_band = [8, 12]
+beta_band = [13, 21]
 
-# 阶段定义（单位：秒）
+# 阶段定义
 phases = [
-    {"name": "Phase 1", "start": 5, "end": 65},  # 10-70秒
-    {"name": "Phase 2", "start": 70, "end": 130},  # 80-140秒
-    {"name": "Phase 3", "start": 135, "end": 195}  # 150-210秒
+    {"name": "Phase 1", "start": 10, "end": 70},
+    {"name": "Phase 2", "start": 80, "end": 140},
+    {"name": "Phase 3", "start": 80, "end": 140},
+    # {"name": "Phase 3", "start": 150, "end": 210}
 ]
 
-# 加载TXT数据（假设是单列时序数据）
-eeg_data = np.loadtxt(data_file)  # 如果数据是多列，可能需要调整
+# 存储结果
+results = {
+    "TBR": {phase["name"]: [] for phase in phases},
+    "TAR": {phase["name"]: [] for phase in phases},
+    "ABR": {phase["name"]: [] for phase in phases}
+}
 
-# 存储每个阶段的功率比
-phase_ratios = {phase["name"]: [] for phase in phases}
+# eeg_data = preprocess(eeg_data, Fs)
 
-# 处理每个阶段
+# 处理数据
 for phase in phases:
     start_idx = int(phase["start"] * Fs)
     end_idx = int(phase["end"] * Fs)
 
-    # 滑动窗口计算功率比
     for start in range(start_idx, end_idx - window_length + 1, overlap):
         window = eeg_data[start: start + window_length]
-        ratio = compute_power_ratio(window, Fs, theta_band, beta_band)
-        phase_ratios[phase["name"]].append(ratio)
+        # PlotFreq(window,250)
+        window= preprocess(window, Fs)
+        # PlotFreq(window, 250)
+        # plt.show()
+        # window, _ = remove_eog_with_visualization2(window, 250, 0, 0)
+        # window =  ceemdan_eeg_artifact_removal(window,250,sample_entropy_threshold=0.2)
 
-# 绘制箱型图对比三个阶段
-plt.figure(figsize=(8, 5))
-plt.boxplot([phase_ratios["Phase 1"], phase_ratios["Phase 2"], phase_ratios["Phase 3"]],
+        # 计算各功率比
+        results["TBR"][phase["name"]].append(compute_power_ratio(window, Fs, theta_band, beta_band))
+        # results["TBR"][phase["name"]].append(compute_power_ratio2(window, Fs, theta_band, beta_band,alpha_band))
+        results["TAR"][phase["name"]].append(compute_power_ratio2(window, Fs, theta_band, alpha_band,alpha_band))
+        results["ABR"][phase["name"]].append(compute_power_ratio2(window, Fs, alpha_band, beta_band,alpha_band))
+
+# 绘制箱型图
+plt.figure(figsize=(15, 5))
+
+# TBR
+plt.subplot(1, 3, 1)
+plt.boxplot([results["TBR"]["Phase 1"], results["TBR"]["Phase 2"], results["TBR"]["Phase 3"]],
             labels=["Phase 1", "Phase 2", "Phase 3"])
-plt.title("Theta/Beta Power Ratio Comparison (Single Channel)")
-plt.xlabel("Experimental Phase")
-plt.ylabel("Power Ratio (Theta/Beta)")
+plt.title("Theta/Beta Ratio (TBR)")
+plt.ylabel("Power Ratio")
 plt.grid(True, linestyle='--', alpha=0.6)
+
+# TAR
+plt.subplot(1, 3, 2)
+plt.boxplot([results["TAR"]["Phase 1"], results["TAR"]["Phase 2"], results["TAR"]["Phase 3"]],
+            labels=["Phase 1", "Phase 2", "Phase 3"])
+plt.title("Theta/Alpha Ratio (TAR)")
+plt.grid(True, linestyle='--', alpha=0.6)
+
+# ABR
+plt.subplot(1, 3, 3)
+plt.boxplot([results["ABR"]["Phase 1"], results["ABR"]["Phase 2"], results["ABR"]["Phase 3"]],
+            labels=["Phase 1", "Phase 2", "Phase 3"])
+plt.title("Alpha/Beta Ratio (ABR)")
+plt.grid(True, linestyle='--', alpha=0.6)
+
 plt.tight_layout()
 plt.show()

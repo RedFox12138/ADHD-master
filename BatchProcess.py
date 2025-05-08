@@ -1,55 +1,37 @@
-import os
 import numpy as np
+import os
 from scipy import io
 
-from PreProcess import  preprocess
+from CeemdanWave import ceemdan_eeg_artifact_removal
+from EogRemovalNew import  optimized_dwt_eog_removal
+from PreProcess import preprocess3
+from SingleDenoise import eog_removal
 from SingleDenoise_pro import remove_eog_with_visualization2
 
-"""
-   该代码用于用python的预处理方法批量处理脑电信号并生成MAT格式的文件
-"""
 
-def process_txt_file(txt_path, output_folder, fs=250, window_size=2):
+def process_txt_file(txt_path, output_folder, fs=250):
     """
-    处理单个txt文件
+    处理单个txt文件，对整个信号进行处理
     :param txt_path: txt文件路径
     :param output_folder: 输出文件夹
     :param fs: 采样频率(Hz)
-    :param window_size: 窗口大小(秒)
     """
     # 读取txt文件中的数据
     data = np.loadtxt(txt_path)
-    total_samples = len(data)
-    samples_per_window = fs * window_size  # 每个窗口的样本数 = 500
 
-    # 计算完整窗口数量
-    num_windows = total_samples // samples_per_window
+    # 对整个信号进行预处理
+    processed_signal,_ = preprocess3(data, fs)
 
-    # 初始化结果矩阵
-    processed_features = []
+    # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
+    processed_signal = eog_removal(processed_signal,250,True)
 
-    # 分窗处理
-    for i in range(num_windows):
-        start_idx = i * samples_per_window
-        end_idx = start_idx + samples_per_window
-        window = data[start_idx:end_idx]
-
-        # 对每个窗口进行预处理
-        features = preprocess(window,250)
-        # features, _ = remove_eog_with_visualization2(features, 250, 0, 0)
-
-        processed_features.append(features)
-
-    # 转换为numpy数组 (num_windows × n)
-    result_matrix = np.array(processed_features)
-
-    # 生成输出文件名(与txt同名，但扩展名为.mat)
+    # 生成输出文件名(与txt同名，但扩展名为_processed.txt)
     filename = os.path.basename(txt_path)
-    mat_filename = os.path.splitext(filename)[0] + '.mat'
-    output_path = os.path.join(output_folder, mat_filename)
+    output_filename = os.path.splitext(filename)[0] + '_processed.txt'
+    output_path = os.path.join(output_folder, output_filename)
 
-    # 保存为.mat文件
-    io.savemat(output_path, {'processed_data': result_matrix})
+    # 保存为txt文件
+    np.savetxt(output_path, processed_signal)
 
 
 def batch_process_txt_folder(input_folder, output_folder):
@@ -76,7 +58,7 @@ def batch_process_txt_folder(input_folder, output_folder):
 
 # 使用示例
 if __name__ == "__main__":
-    input_folder = 'D:\\pycharm Project\\ADHD-master\\data\\原信号'  # 替换为你的txt文件夹路径
-    output_folder = 'D:\\pycharm Project\\ADHD-master\\data\\Python预处理去眼电'  # 替换为你想保存mat文件的文件夹
+    input_folder = 'D:\\pycharm Project\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
+    output_folder = 'D:\\pycharm Project\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
 
     batch_process_txt_folder(input_folder, output_folder)

@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from psychopy import visual, core, event, sound
 import random
@@ -22,7 +24,7 @@ def preparation_phase(duration=5):
 
 
 # 静息阶段（不变）
-def resting_phase(duration=60):
+def resting_phase1(duration=60):
     images = ["lake.jpg", "clouds.jpg"]
     image_stims = [visual.ImageStim(win, image=img, size=3.0) for img in images]
     start_time = time.time()
@@ -36,7 +38,220 @@ def resting_phase(duration=60):
         if event.getKeys(keyList=['escape']):
             win.close()
             core.quit()
+#
+def resting_phase2(duration=60):
 
+    images = ["lake.jpg", "clouds.jpg"] if os.path.exists("lake.jpg") else []
+    if images:
+        image_stims = [visual.ImageStim(win, image=img, size=3.0) for img in images]
+
+    # 注意力干扰元素
+    flicker_circle = visual.Circle(win, radius=0.2, fillColor='red', opacity=0)
+    moving_text = visual.TextStim(win, text="", height=0.1, color='white')
+
+    # 随机形状参数
+    shapes = {
+        'circle': lambda: visual.Circle(win, radius=0.2, edges=32),
+        'square': lambda: visual.Rect(win, width=0.4, height=0.4),
+        'triangle': lambda: visual.ShapeStim(
+            win,
+            vertices=[[0, 0.3], [-0.26, -0.15], [0.26, -0.15]],  # 等边三角形
+            closeShape=True
+        )
+    }
+
+    # 颜色库 (RGB值)
+    colors = [
+        (1, -1, -1),  # 红
+        (-1, 1, -1),  # 绿
+        (-1, -1, 1),  # 蓝
+        (1, 1, -1),  # 黄
+        (1, -1, 1),  # 紫
+        (-1, 1, 1),  # 青
+        (1, 0.5, -1),  # 橙
+    ]
+
+    # 干扰参数
+    flicker_freq = 10  # 闪烁频率(Hz)
+    current_shape = None
+    current_color = None
+
+    # 计时器
+    global_clock = core.Clock()
+    flicker_clock = core.Clock()
+
+    while global_clock.getTime() < duration:
+        # 基础静息背景
+        if images:
+            current_img = int(global_clock.getTime()) % 2
+            image_stims[current_img].draw()
+
+        # 随机闪烁图形
+        if flicker_clock.getTime() > 1 / flicker_freq:
+            # 随机选择形状和颜色
+            shape_type = random.choice(list(shapes.keys()))
+            current_shape = shapes[shape_type]()  # 创建新形状实例
+            current_color = random.choice(colors)
+
+            # 设置属性
+            current_shape.fillColor = current_color
+            current_shape.pos = (random.uniform(-0.8, 0.8), random.uniform(-0.5, 0.5))
+            current_shape.opacity = random.uniform(0.3, 1)  # 随机透明度
+
+            flicker_clock.reset()
+
+        # 绘制当前形状（如果存在）
+        if current_shape:
+            current_shape.draw()
+
+        # 其他干扰保持不变（移动文字/声音等）
+        moving_text.text = random.choice(["*", "#", "?", "!", "~"])
+        moving_text.pos = (np.sin(global_clock.getTime()), np.cos(global_clock.getTime()) * 0.5)
+        moving_text.draw()
+
+        win.flip()
+
+        if event.getKeys(keyList=['escape']):
+            win.close()
+            core.quit()
+
+
+def arithmetic_phase(duration=60):
+    # 创建文本刺激
+    problem_text = visual.TextStim(win, text="", height=0.15, color='white')
+    instruction_text = visual.TextStim(win, text="请心算以下题目", height=0.1, color='white', pos=(0, -0.3))
+
+    # 计时器
+    start_time = time.time()
+    problem_duration = 10  # 每10秒更换一题
+
+    while time.time() - start_time < duration:
+        # 生成三位数加减法题目
+        num1 = random.randint(10000, 99999)
+        num2 = random.randint(10000, 99999)
+        operator = random.choice(['+'])
+
+        # 确保减法结果为正数
+        if operator == '-' and num1 < num2:
+            num1, num2 = num2, num1
+
+        # 显示题目
+        problem_text.text = f"{num1} {operator} {num2} = ?"
+        problem_text.draw()
+        instruction_text.draw()
+        win.flip()
+
+        # 等待10秒或直到按下退出键
+        timer = core.CountdownTimer(problem_duration)
+        while timer.getTime() > 0:
+            if event.getKeys(keyList=['escape']):
+                win.close()
+                core.quit()
+            core.wait(0.1)  # 减少CPU占用
+
+    # 显示结束信息
+    end_text = visual.TextStim(win, text="心算任务结束", height=0.1, color='white')
+    end_text.draw()
+    win.flip()
+    core.wait(2)
+
+
+def resting_phase3(duration=60):
+    # 加载静态背景图（自然场景）
+    images = ["mountain.jpg"] if os.path.exists("mountain.jpg") else []
+    if images:
+        image_stims = [visual.ImageStim(win, image=img, size=3.0, opacity=0.7) for img in images]  # 进一步降低背景图透明度
+
+    # 干扰元素参数调整
+    max_opacity = 0.4  # 略微提高最大透明度到40%
+    min_size = 0.15  # 增大最小尺寸
+    max_size = 0.25  # 增大最大尺寸
+    drift_speed = 0.8  # 提高漂移速度（°/秒）
+    color_intensity = 0.1  # 颜色变化强度参数
+
+    # 创建干扰元素（增加到2个）
+    distractors = []
+    # for _ in range(2):
+    #     distractor = visual.ShapeStim(
+    #         win,
+    #         vertices='circle',
+    #         size=random.uniform(min_size, max_size),
+    #         fillColor=(0.95, 0.95, 0.95),  # 提高基础亮度
+    #         opacity=random.uniform(0.2, max_opacity),  # 初始不透明
+    #         pos=(random.uniform(-0.8, 0.8), random.uniform(-0.5, 0.5))
+    #     )
+    #     distractors.append(distractor)
+
+    # 颜色库（略微提高饱和度）
+    pastel_colors = [
+        (0.95, 0.8, 0.8),  # 粉
+        (0.8, 0.95, 0.8),  # 绿
+        (0.8, 0.8, 0.95),  # 蓝
+        (0.95, 0.95, 0.7),  # 黄
+    ]
+
+    # 状态变量
+    drift_directions = [(random.uniform(-1, 1) * drift_speed,
+                         random.uniform(-1, 1) * drift_speed)
+                        for _ in range(2)]
+    change_interval = random.uniform(2, 4)  # 缩短变化间隔到2-4秒
+    last_change = 0
+
+    # 主循环
+    global_clock = core.Clock()
+    while global_clock.getTime() < duration:
+        # 绘制背景
+        if images:
+            current_img = int(global_clock.getTime() / 8) % len(images)  # 加快背景切换频率到8秒
+            image_stims[current_img].draw()
+
+        # 更新干扰元素参数（更频繁的变化）
+        if global_clock.getTime() - last_change > change_interval:
+            for i, distractor in enumerate(distractors):
+                # 更明显的颜色变化
+                base_color = list(random.choice(pastel_colors))
+                distractor.fillColor = [min(c + random.uniform(-color_intensity, color_intensity), 1)
+                                        for c in base_color]
+                distractor.opacity = random.uniform(0.25, max_opacity)
+                distractor.size = random.uniform(min_size, max_size)
+                drift_directions[i] = (random.uniform(-1, 1) * drift_speed,
+                                       random.uniform(-1, 1) * drift_speed)
+            change_interval = random.uniform(2, 4)
+            last_change = global_clock.getTime()
+
+        # 更新并绘制干扰元素
+        for i, distractor in enumerate(distractors):
+            # 更活跃的运动轨迹
+            new_x = distractor.pos[0] + drift_directions[i][0] * 0.016
+            new_y = distractor.pos[1] + drift_directions[i][1] * 0.016
+
+            # 边界反弹（增加运动变化）
+            if abs(new_x) > 0.9:
+                drift_directions[i] = (-drift_directions[i][0] * 1.2,
+                                       drift_directions[i][1] * random.uniform(0.8, 1.2))
+            if abs(new_y) > 0.7:
+                drift_directions[i] = (drift_directions[i][0] * random.uniform(0.8, 1.2),
+                                       -drift_directions[i][1] * 1.2)
+
+            distractor.pos = (new_x, new_y)
+            distractor.draw()
+
+        # 增加文字干扰频率和可见性
+        if random.random() < 0.03:  # 提高到3%概率出现
+            symbols = ["✦", "•", "○", "⌂"]  # 使用更显眼的符号
+            txt = visual.TextStim(win,
+                                  text=random.choice(symbols),
+                                  height=0.08,  # 增大尺寸
+                                  color=(0.8, 0.8, 0.8),  # 提高对比度
+                                  opacity=random.uniform(0.3, 0.6),
+                                  pos=(random.uniform(-0.9, 0.9), random.uniform(-0.6, 0.6)))
+            txt.draw()
+
+        win.flip()
+
+        if event.getKeys(keyList=['escape']):
+            win.close()
+            core.quit()
 
 # 休息阶段（不变）
 def break_phase(duration=5):
@@ -267,23 +482,15 @@ def schulte_grid_phase(duration=60):
 
 # 主实验流程（添加舒尔特方格阶段）
 def run_experiment():
-    print("准备阶段开始")
+    # print("准备阶段开始")
     preparation_phase(10)
-
-    print("静息阶段开始")
-    resting_phase(60)
-
-    print("休息阶段开始")
+    # print("静息阶段开始")
+    resting_phase3(60)
     break_phase(10)
+    arithmetic_phase(60)
 
-    print("注意力阶段开始")
-    attention_phase(60)
-
-    print("休息阶段开始")
-    break_phase(10)
-
-    print("舒尔特方格阶段开始")
-    schulte_grid_phase(60)
+    # print("舒尔特方格阶段开始")
+    # schulte_grid_phase(60)
 
     text = visual.TextStim(win, text="实验结束，谢谢参与！", height=0.1)
     text.draw()

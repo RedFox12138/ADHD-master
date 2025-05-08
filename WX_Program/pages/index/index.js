@@ -1,57 +1,60 @@
 const app = getApp();
-var receivedData = [];//全局用来接收数据的点
-var batch_len = 500;
+var receivedData = []; // 全局数据接收缓冲区
+var batch_len = 500;   // 每批发送数据量
+
 Page({
   data: {
+    // 设备连接状态
     connected: false,
     deviceName: '',
-    inputData: '', // 用户输入的十六进制数据
-    x_data:[],
-    y_data:[],
+    inputData: '',
+
+    // 数据可视化
+    x_data: [],
+    y_data: [],
     x_value: [],
     EEGdata: [],
+
+    // 脑电参数
     powerRatio: null,
+    DeltaPower: null,
     baselineDisplay: "--",
     attentionDisplay: "--",
-    
-    // 实验相关状态
+
+    // 实验控制
     experimentStarted: false,
-    currentPhase: '', // '基准阶段' 或 '治疗阶段'
+    currentPhase: '',      // '基准阶段'/'治疗阶段'
     remainingTime: 0,
     baselineValue: null,
     baselineSamples: [],
     currentAttention: null,
-    
-    // 游戏相关状态
-    houseHeight: 50,
-    houseWidth: 80,
-    roofHeight: 30,
-    roofWidth: 100,
-    gameProgress: 0, // 0-100
-    timer: null,
-    phaseTimer: null
+
+    birdY: 50,          // 小鸟垂直位置（百分比）
+    currentScene: 'forest', // 当前场景
+    scenes: {
+      hell: { level: -2, image: '/images/hell.jpg', threshold: -20 },
+      ground: { level: -1, image: '/images/ground.jpg', threshold: -10 },
+      forest: { level: 0, image: '/images/forest.jpg', threshold: 0 },
+      sky: { level: 1, image: '/images/sky.jpg', threshold: 60 },
+      space: { level: 2, image: '/images/space.jpg', threshold: 120 },
+      heaven: { level: 3, image: '/images/heaven.jpg', threshold: 180 }
+    },
+    sceneTimer: 0,      // 场景计时器（秒）
+    sceneChanged: false, // 场景是否刚变化
+    sceneCooldown: false // 场景切换冷却状态
   },
 
-  onLoad: function () {
-    var that = this;
-    var arr1 = new Array(20);
-    var arr2 = new Array(20);
-    for (var i = 0; i < 20; i++) {
-      arr1[i] = i + 1;
-      arr2[i] = 0;
-    }
-    that.setData({
-      x_value: arr1,
-      EEGdata: arr2,
-    });
+  onLoad: function() {
+    // 初始化图表数据
+    var arr1 = Array(20).fill().map((_,i) => i+1);
+    var arr2 = Array(20).fill(0);
+    this.setData({ x_value: arr1, EEGdata: arr2 });
 
-    
+    // 蓝牙连接监听
     wx.onBLEConnectionStateChange(res => {
-      console.log('连接状态变化:', res);
       if (!res.connected) {
         this.setData({ connected: false });
         wx.showToast({ title: '连接已断开', icon: 'none' });
-        // 如果实验正在进行中，停止实验
         if (this.data.experimentStarted) {
           this.stopExperiment();
         }
@@ -65,22 +68,14 @@ Page({
       wx.showToast({ title: '请先连接设备', icon: 'none' });
       return;
     }
-    
+
     this.setData({
       experimentStarted: true,
       currentPhase: '基准阶段',
       remainingTime: 20,
       baselineValue: null,
-      baselineSamples: [],
-      currentAttention: null,
-      houseHeight: 50,
-      houseWidth: 80,
-      roofHeight: 30,
-      roofWidth: 100,
-      gameProgress: 0
+      baselineSamples: []
     });
-    
-    // 启动基准阶段计时器
     this.startPhaseTimer();
   },
   
@@ -135,73 +130,125 @@ Page({
   // 计算基准值
 // 计算基准值
 calculateBaseline: function() {
-  if (this.data.baselineSamples.length === 0) {
-    console.warn('没有可用的基准样本');
-    return 0;
-  }
-  
-  const sum = this.data.baselineSamples.reduce((a, b) => a + parseFloat(b), 0);
-  const avg = sum / this.data.baselineSamples.length;
-  // 强制更新UI
-  this.setData({
-    baselineValue: parseFloat(avg.toFixed(2))
-  });
-  
-  return parseFloat(avg.toFixed(2));
+  const samples = this.data.baselineSamples;
+  if (samples.length === 0) return 0;
+
+  const avg = samples.reduce((a,b) => a + parseFloat(b), 0) / samples.length;
+  this.setData({ baselineValue: parseFloat(avg.toFixed(2)) });
+  return this.data.baselineValue;
 },
   
-  // 启动治疗阶段
-  startTreatmentPhase: function() {
-    const that = this;
-    
-    // 启动计时器
-    this.startPhaseTimer();
-    
-    // 启动游戏更新循环
-    that.data.timer = setInterval(() => {
-      // 更新游戏状态
-      that.updateGameState();
-    }, 100); // 每100毫秒更新一次游戏状态
-  },
+
+startTreatmentPhase: function() {
+  this.setData({
+    currentPhase: '治疗阶段',
+    remainingTime: 180, // 延长到3分钟
+    gameStarted: true,
+    gameOver: false,
+    birdY: 50,
+    currentScene: 'forest',
+    sceneTimer: 0,
+    sceneChanged: false
+  });
+
+  // 游戏倒计时
+  const gameTimer = setInterval(() => {
+    if(this.data.remainingTime <= 0){
+      clearInterval(gameTimer);
+      this.setData({ gameOver: true });
+      return;
+    }
+    this.setData({ remainingTime: this.data.remainingTime - 1 });
+  }, 1000);
+
+  // 游戏循环
+  this.data.timer = setInterval(this.updateGameState.bind(this), 50);
+},
   
-  // 更新游戏状态
-  updateGameState: function() {
-    if (this.data.currentAttention === null) return;
-    
-    const baseline = this.data.baselineValue;
-    const current = this.data.currentAttention;
-    
-    // 计算注意力变化
-    const attentionDiff = current - baseline;
-    
-    // 更新游戏进度 (0-100)
-    let progress = this.data.gameProgress;
-    progress += attentionDiff * 0.5; // 调整系数控制灵敏度
-    
-    // 限制在0-100范围内
-    progress = Math.max(0, Math.min(100, progress));
-    
-    // 更新房子大小
-    const houseHeight = 50 + progress * 1.5;
-    const houseWidth = 80 + progress * 0.8;
-    const roofHeight = 30 + progress * 0.5;
-    const roofWidth = 100 + progress;
-    
+  // 重新开始实验
+restartExperiment: function() {
+    this.stopExperiment();
     this.setData({
-      gameProgress: progress,
-      houseHeight,
-      houseWidth,
-      roofHeight,
-      roofWidth
+        gameOver: false,
+        experimentStarted: false
+    });
+    // 可以添加一些延迟让用户看到状态变化
+    setTimeout(() => {
+        this.startExperiment();
+    }, 500);
+},
+  
+updateGameState: function() {
+  if (!this.data.gameStarted || this.data.gameOver || this.data.sceneCooldown) return;
+  
+  // 计算注意力差值
+  const attentionDiff = this.data.currentAttention - this.data.baselineValue;
+  
+  // 更新小鸟位置（带速度限制）
+  let newBirdY = this.data.birdY;
+  const speed = 0.15; // 降低速度防止过冲
+  
+  if (attentionDiff > 0) {
+    newBirdY = Math.max(5, newBirdY - speed);
+  } else {
+    newBirdY = Math.min(95, newBirdY + speed);
+  }
+  
+  // 强制边界锁定
+  if (newBirdY <= 5) newBirdY = 5;
+  if (newBirdY >= 95) newBirdY = 95;
+  
+  this.setData({ birdY: newBirdY });
+  
+  // 场景检查（带冷却检测）
+  if (newBirdY === 5 || newBirdY === 95) {
+    this.checkSceneChange(newBirdY, attentionDiff);
+  }
+},
+
+checkSceneChange: function(newBirdY, attentionDiff) {
+  if (this.data.sceneCooldown) return;
+  
+  const currentScene = this.data.currentScene;
+  const currentLevel = this.data.scenes[currentScene].level;
+  
+  // 精确逐级切换逻辑
+  let targetLevel = currentLevel;
+  if (newBirdY === 5 && attentionDiff > 0) {
+    targetLevel = Math.min(currentLevel + 1, 3); // 最大层级3
+  } else if (newBirdY === 95 && attentionDiff < 0) {
+    targetLevel = Math.max(currentLevel - 1, -2); // 最小层级-2
+  } else {
+    return;
+  }
+  
+  // 查找目标场景
+  const targetScene = Object.entries(this.data.scenes).find(
+    ([_, s]) => s.level === targetLevel
+  );
+  
+  if (targetScene) {
+    // 开启冷却
+    this.setData({ sceneCooldown: true });
+    
+    // 执行切换
+    const [newSceneKey] = targetScene;
+    this.setData({
+      currentScene: newSceneKey,
+      birdY: targetLevel > currentLevel ? 95 : 5,
+      sceneChanged: true
     });
     
-    // 实时更新UI
-    this.setData({
-      currentAttention: current,
-      baselineValue: baseline
-    });
-  },
-  
+    // 调试日志
+    console.log(`[切换] ${currentScene}(${currentLevel}) → ${newSceneKey}(${targetLevel})`);
+    
+    // 冷却计时器（500ms内禁止再次切换）
+    setTimeout(() => {
+      this.setData({ sceneCooldown: false });
+    }, 500);
+  }
+},
+
   getUserId() {
     return new Promise((resolve, reject) => {
       const user_id = wx.getStorageSync('user_id');
@@ -214,13 +261,13 @@ calculateBaseline: function() {
         success: (res) => {
           if (res.code) {
             wx.request({
-              url: 'http://7809sk6421.zicp.fun:47409/getOpenId',
+              url: 'http://4nbsf9900182.vicp.fun:18595/getOpenId',
               method: 'POST',
               data: { code: res.code },
               success: (res) => {
                 console.log(res);
                 const user_id = res.data.openid;
-                wx.setStorageSync('user_id', user_id);
+                wx.setStorageSync('user_id', user_id);  
                 resolve(user_id);
               },
               fail: (err) => {
@@ -243,33 +290,45 @@ calculateBaseline: function() {
     this.getUserId().then((user_id) => {
       const dataToSend = receivedData.slice(0, batch_len);
       receivedData = receivedData.slice(batch_len);
-  
       wx.request({
-        url: 'http://7809sk6421.zicp.fun:47409/process', 
+        url: 'http://4nbsf9900182.vicp.fun:18595/process', 
         method: 'POST',
         data: {
           points: dataToSend,
           userId: user_id
         },
         success: (res) => {
+          console.log(res);
           // 检查返回数据是否有效
-          if (!res.data || res.data.TBR === undefined || res.data.TBR === null || res.data.TBR < 0) {
-            console.log('无效的TBR值，已忽略');
+          if (!res.data || !Array.isArray(res.data.TBR) || res.data.TBR.length === 0) {
+            console.log('无效的TBR数据，已忽略');
             return;
           }
           
-          const powerRatio = parseFloat(res.data.TBR);
-          const attentionValue = Math.max(0, Math.min(100, 100 - (powerRatio * 10))); // 确保在0-100范围内
-          // 强制更新UI
+          // 计算TBR数组的平均值
+          const validTBRs = res.data.TBR.filter(tbr => tbr !== undefined && tbr !== null && tbr >= 0);
+          if (validTBRs.length === 0) {
+            console.log('没有有效的TBR值');
+            return;
+          }
+          
+          // const DeltaPowerCurrent = res.data.DeltaCumAvg[-1];
+          const averageTBR = validTBRs.reduce((sum, tbr) => sum + tbr, 0) / validTBRs.length;
+          const attentionValues = validTBRs.map(tbr => 
+            Math.max(0, Math.min(100, tbr * 10))
+          );
+          
+          // 强制更新UI显示平均值
           this.setData({
-            powerRatio: powerRatio.toFixed(2),
-            currentAttention: attentionValue.toFixed(2)
+            // DeltaPower: DeltaPowerCurrent.toFixed(2),
+            powerRatio: averageTBR.toFixed(2),
+            currentAttention: (averageTBR * 10).toFixed(2)
           });
           
-          // 如果在基准阶段，收集样本
+          // 如果在基准阶段，收集所有样本
           if (this.data.experimentStarted && this.data.currentPhase === '基准阶段') {
             this.setData({
-              baselineSamples: [...this.data.baselineSamples, attentionValue]
+              baselineSamples: [...this.data.baselineSamples, ...attentionValues]
             });
           }
           

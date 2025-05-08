@@ -139,7 +139,7 @@ def remove_eog_with_visualization2(raw_signal, fs=250, Drawflag=0,smooth_flag=0)
     J = 6 # 小波分解层数
     mid_filter_len = int(0.1*fs)
 
-    high_threshold = 3
+    high_threshold = 2.5
 
     # ===== 3. 高阈值点检测 =====
     high_points = np.where(amplitude > high_threshold)[0]

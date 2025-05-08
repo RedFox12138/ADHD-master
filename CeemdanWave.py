@@ -11,47 +11,64 @@ from PlotFreq import PlotFreq
 """
 
 
-def ewt_decomposition(signal, fs, cutoff_freq=4):
+def ewt_decomposition(signal, fs, cutoff_freq=12, transition_width=1.0):
     """
-    Empirical Wavelet Transform (EWT) decomposition with improved frequency handling
+    Enhanced Empirical Wavelet Transform (EWT) decomposition with smooth transition
 
     Parameters:
         signal (array): Input EEG signal
-        fs (float): Sampling frequency
-        cutoff_freq (float): Cutoff frequency in Hz (default=4)
+        fs (float): Sampling frequency (Hz)
+        cutoff_freq (float): Cutoff frequency in Hz (default=12)
+        transition_width (float): Transition band width in Hz (default=1.0)
 
     Returns:
         tuple: (ewt_components, mfb) where:
-            ewt_components: list of decomposed components
+            ewt_components: list of decomposed components [low_freq, high_freq]
             mfb: empirical wavelet filter bank
     """
     N = len(signal)
-    f_actual = np.fft.fftfreq(N, 1/fs)  # Correct frequency axis including negative frequencies
+    if N == 0:
+        raise ValueError("Input signal cannot be empty")
 
-    # Compute FFT of the signal
+    # Generate frequency axis (correct for both even and odd N)
+    f_actual = np.fft.fftfreq(N, 1 / fs)
+    f_abs = np.abs(f_actual)
+
+    # Compute FFT
     fft_signal = fft(signal)
 
-    # Initialize filter bank using actual frequencies
-    mfb = []
-    # Low-pass filter (|f| <= cutoff_freq)
-    low_pass_mask = (np.abs(f_actual) <= cutoff_freq).astype(float)
-    mfb.append(low_pass_mask)
-    # High-pass filter (|f| > cutoff_freq)
-    high_pass_mask = (np.abs(f_actual) > cutoff_freq).astype(float)
-    mfb.append(high_pass_mask)
+    # Create smooth transition filters
+    def smooth_transition(f, fc, bw):
+        """Create smooth transition mask using raised cosine window"""
+        return 0.5 * (1 + np.cos(np.pi * np.clip((f - fc) / bw + 0.5, 0, 1)))
+
+    # Low-pass filter with smooth transition
+    low_pass_mask = np.zeros_like(f_abs)
+    transition_start = cutoff_freq - transition_width / 2
+    transition_end = cutoff_freq + transition_width / 2
+
+    # Apply smooth transitions
+    idx_full_pass = f_abs <= transition_start
+    idx_transition = (f_abs > transition_start) & (f_abs < transition_end)
+
+    low_pass_mask[idx_full_pass] = 1.0
+    low_pass_mask[idx_transition] = smooth_transition(
+        f_abs[idx_transition], transition_start, transition_width)
+
+    # High-pass filter is complement of low-pass
+    high_pass_mask = 1 - low_pass_mask
+
+    # Store filter bank
+    mfb = [low_pass_mask, high_pass_mask]
 
     # Apply filter bank
     ewt_components = []
-    for k in range(2):
-        # Frequency domain filtering
-        filtered_fft = fft_signal * mfb[k]
-
-        # Inverse FFT to get time domain signal (ensure real output)
+    for mask in mfb:
+        filtered_fft = fft_signal * mask
         component = ifft(filtered_fft)
-        ewt_components.append(np.real(component))
+        ewt_components.append(np.real_if_close(component))
 
     return ewt_components, mfb
-
     # # Visualization (optional)
     # plt.figure(figsize=(10, 8))
     #
@@ -75,8 +92,6 @@ def ewt_decomposition(signal, fs, cutoff_freq=4):
     #
     # plt.tight_layout()
     # plt.show()
-
-    return ewt_components, mfb
 
 
 def ceemdan_eeg_artifact_removal(raw_eeg, fs, cutoff_freq=4,

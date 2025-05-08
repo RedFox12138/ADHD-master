@@ -1,0 +1,81 @@
+<view class="container">
+  <view class="status">
+    连接状态：{{connected ? '已连接' + deviceName : '未连接'}}
+  </view>
+
+  <view class="parameter">
+    Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}
+  </view>
+  
+  <view class="experiment-info" wx:if="{{experimentStarted}}">
+    <view>实验阶段：{{currentPhase}}</view>
+    <view>剩余时间：{{remainingTime}}秒</view>
+    <view>基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
+    <view>当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
+  </view>
+
+  <canvas 
+    class="canvas" 
+    canvas-id="EEG" 
+    binderror="canvasIdErrorCallback" 
+    disable-scroll="true" 
+  />
+  
+  <!-- 游戏区域 -->
+  <view class="game-container" wx:if="{{experimentStarted && currentPhase === '治疗阶段'}}">
+    <view class="game-stats">
+      <view>得分: {{score}}</view>
+      <view>护盾: {{shield}}%</view>
+      <view>推进能量: {{boost}}%</view>
+    </view>
+    
+    <view class="game-message" wx:if="{{gameMessage}}">{{gameMessage}}</view>
+    <!-- 调整游戏结束提示，显示复活信息 -->
+    <view class="game-over" wx:if="{{gameOver}}">
+      护盾耗尽！{{3 - (messageTimer/1000)}}秒后复活
+    </view>
+    
+    <view class="game-area">
+      <view class="stars" />
+      
+      <!-- 陨石列表 -->
+      <block wx:for="{{meteors}}" wx:key="index">
+        <view 
+          class="meteor"
+          style="left: {{item.x}}%; top: {{item.y}}%; width: {{item.size}}px; height: {{item.size}}px; background-color: {{item.hit ? '#FF5722' : '#9E9E9E'}};"
+        />
+      </block>
+      
+      <!-- 爆炸效果 -->
+      <block wx:for="{{explosions}}" wx:key="index">
+        <view
+          class="explosion"
+          style="left: {{item.x}}%; top: {{item.y}}%; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"
+        />
+      </block>
+      
+      <!-- 太空飞船 -->
+      <view 
+        class="spaceship"
+        style="left: {{spaceshipX}}%; top: {{spaceshipY}}%; width: {{spaceshipSize}}px; height: {{spaceshipSize}}px; background-color: {{spaceshipColor}};"
+      >
+        <view class="spaceship-wing" style="border-top-color: {{spaceshipColor}};" />
+      </view>
+    </view>
+  </view>
+
+  <!-- 控制按钮区域 -->
+  <view class="control-area">
+    <input 
+      class="input" 
+      placeholder="请输入十六进制数据（如：A1B2C3）" 
+      bindinput="handleInput" 
+      value="{{inputData}}" 
+    />
+    <button class="btn" bindtap="sendData">发送数据</button>
+    <button class="btn" bindtap="startExperiment" wx:if="{{!experimentStarted}}">开始实验</button>
+    <button class="btn" bindtap="navigateToScan">
+      {{connected ? '重新连接' : '搜索设备'}}
+    </button>
+  </view>
+</view>

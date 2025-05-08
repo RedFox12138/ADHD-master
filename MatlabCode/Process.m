@@ -1,34 +1,9 @@
 % 设置参数
-inputFolder = "D:\pycharm Project\ADHD-master\data\原信号\";  % 输入文件夹路径
-outputFolder = "D:\pycharm Project\ADHD-master\data\Matlab预处理\";  % 输出文件夹路径
+inputFolder = "D:\pycharm Project\ADHD-master\data\oksQL7aHWZ0qkXkFP-oC05eZugE8\0416\0416 SF头顶风景画移动+心算1.txt";  % 输入文件夹路径
+outputFolder = "D:\pycharm Project\ADHD-master\MatlabCode\";  % 输出文件夹路径
 windowLength = 2;   % 窗长 (秒)
 fs = 250;           % 采样率 (Hz) [假设为250Hz，请根据实际情况修改]
-lpfCutoff = 40;     % 低通滤波器截止频率 (Hz)
-notchFreq = 50;     % 陷波频率 (Hz)
-notchQ = 30;        % 陷波器品质因数
-hpfCutoff = 0.5;    % 高通滤波器截止频率 (Hz)
 
-% 计算窗口样本数
-windowSamples = fs * windowLength;
-
-% 设计滤波器
-hpf = designfilt('highpassiir', 'FilterOrder', 1, 'PassbandFrequency', ...
-                 hpfCutoff, 'PassbandRipple', 1, 'SampleRate', fs);
-
-% 设计35Hz低通FIR滤波器
-lpfOrder = 50;  % 滤波器阶数
-lpf = designfilt('lowpassfir', ...
-                 'FilterOrder', lpfOrder, ...
-                 'CutoffFrequency', lpfCutoff, ...
-                 'SampleRate', fs);
-
-% 设计50Hz陷波IIR滤波器
-notchWidth = notchFreq / notchQ;  % 陷波带宽
-notch = designfilt('bandstopiir', ...
-                   'FilterOrder', 2, ...
-                   'HalfPowerFrequency1', notchFreq - notchWidth/2, ...
-                   'HalfPowerFrequency2', notchFreq + notchWidth/2, ...
-                   'SampleRate', fs);
 
 % 获取文件夹中所有.mat文件
 fileList = dir(fullfile(inputFolder, '*.txt'));
@@ -69,7 +44,7 @@ for fileIdx = 1:length(fileList)
         raw = data(startIdx:endIdx);
         
         % 串联滤波
-        filtered = filtfilt(notch, filtfilt(hpf, filtfilt(lpf, raw)));
+        filtered = preprocess(raw);
         filteredData(i,:) = filtered;
     end
     
@@ -81,157 +56,188 @@ end
 
 disp('所有文件处理完成！');
 %%
-input_mat = "D:\pycharm Project\ADHD-master\MatlabCode\eog_removed.mat";
-
- % 参数设置
+clear all;
+% 参数设置
 fs = 250;           % 采样率 (Hz)
-windowLength = 2;   % 窗长 (秒)
+windowLength = 2;    % 窗长 (秒)
+stepSize = 2;        % 间隔 (秒)
 
-% 1. 读取Python处理后的MAT文件
-data = load(input_mat);
-eog_removed_data = data.eog_removed_data;
+% 1. 读取TXT文件数据
+txtFilePath = 'D:\pycharm Project\ADHD-master\data\oksQL7aHWZ0qkXkFP-oC05eZugE8\0416\0416 SF头顶风景画移动+心算1.txt'; % 请替换为实际文件路径
+rawData = load(txtFilePath); % 假设TXT文件包含单列数据
 
-% 获取窗口数量
-numWindows = size(eog_removed_data, 1);
+% 2. 计算窗口参数
+samplesPerWindow = windowLength * fs;
+samplesPerStep = stepSize * fs;
+totalSamples = length(rawData);
+numWindows = floor((totalSamples - samplesPerWindow) / samplesPerStep) + 1;
 
 % 3. 计算每个窗口的θ/β功率比
 theta_beta_ratio = zeros(numWindows, 1);
 
 for i = 1:numWindows
+    % 计算当前窗口的起始和结束样本
+    startSample = (i-1)*samplesPerStep + 1;
+    endSample = startSample + samplesPerWindow - 1;
+    
     % 获取当前窗口信号
-    windowSignal = eog_removed_data(i,:);
-
+    windowSignal = rawData(startSample:endSample);
+%     windowSignal = preprocess(windowSignal,250);
+    ProSignal = EEGPreprocess(windowSignal,250);
+    windowSignal = ProSignal;
     % 计算θ/β功率比
-    theta_beta_ratio(i) =compute_power_ratio(windowSignal,250,[4,8],[12,30]);
+    theta_beta_ratio(i) = compute_power_ratio(windowSignal, fs, [4,8], [12,21]);
 end
 
-  % 4. 将窗口分为前一半和后一半
-    halfPoint = floor(numWindows/3);
-    firstHalf = theta_beta_ratio(1:halfPoint);
-    secondHalf = theta_beta_ratio(halfPoint+1:end);
-    
-    % 5. 绘制散点图
-    figure;
-    hold on;
-    
-    % 绘制前一半窗口的散点（蓝色）
-    scatter(1:length(firstHalf), firstHalf, 100, 'b', 'filled', 'DisplayName', '前一半窗口');
-    
-    % 绘制后一半窗口的散点（红色）
-    scatter((1:length(secondHalf)) + length(firstHalf), secondHalf, 100, 'r', 'filled', 'DisplayName', '后一半窗口');
-    
-    % 绘制均值线
-    plot([1 length(firstHalf)], [mean(firstHalf) mean(firstHalf)], 'b--', 'LineWidth', 2, 'DisplayName', '前一半均值');
-    plot([length(firstHalf)+1 length(firstHalf)+length(secondHalf)], [mean(secondHalf) mean(secondHalf)], 'r--', 'LineWidth', 2, 'DisplayName', '后一半均值');
-    
-    % 添加图例和标签
-    legend('Location', 'best');
-    title('θ/β功率比随时间变化（2s窗口）');
-    xlabel('窗口序号');
-    ylabel('θ/β功率比');
-    grid on;
-    
-    % 6. 计算并显示统计信息
-    meanFirst = mean(firstHalf);
-    meanSecond = mean(secondHalf);
-    
-    fprintf('前一半窗口数量: %d, 平均θ/β比: %.4f\n', length(firstHalf), meanFirst);
-    fprintf('后一半窗口数量: %d, 平均θ/β比: %.4f\n', length(secondHalf), meanSecond);
-    
-    % 根据图片中的判断标准
-    if meanFirst > meanSecond
-        fprintf('注意力水平提高 (θ/β比降低)\n');
-    else
-        fprintf('注意力水平降低 (θ/β比升高)\n');
-    end
+% 4. 计算时间轴 (秒)
+timeAxis = (0:numWindows-1)' * stepSize + windowLength/2;
+
+% 5. 选择10-70s和80-140s的数据段
+segment1Indices = find(timeAxis >= 10 & timeAxis <= 70);
+segment2Indices = find(timeAxis >= 80 & timeAxis <= 140);
+
+segment1Ratios = theta_beta_ratio(segment1Indices);
+segment2Ratios = theta_beta_ratio(segment2Indices);
+
+% 6. 绘制箱型图对比
+figure;
+boxplot([segment1Ratios, segment2Ratios], 'Labels', {'10-70s', '80-140s'});
+title('θ/β功率比箱型图对比 (2s窗口)');
+ylabel('θ/β功率比');
+grid on;
+
+% 7. 计算并显示统计信息
+meanSeg1 = mean(segment1Ratios);
+meanSeg2 = mean(segment2Ratios);
+stdSeg1 = std(segment1Ratios);
+stdSeg2 = std(segment2Ratios);
+
+fprintf('10-70s段: %d个窗口, 平均θ/β比: %.4f±%.4f\n', length(segment1Ratios), meanSeg1, stdSeg1);
+fprintf('80-140s段: %d个窗口, 平均θ/β比: %.4f±%.4f\n', length(segment2Ratios), meanSeg2, stdSeg2);
+
+% 根据图片中的判断标准
+if meanSeg1 > meanSeg2
+    fprintf('注意力水平提高 (θ/β比降低)\n');
+else
+    fprintf('注意力水平降低 (θ/β比升高)\n');
+end
 %%
 % 参数设置
 % 参数设置
 fs = 250;               % 采样率
-windowLength = 500;     % 每个窗口的长度
-bands = {'delta', 'theta', 'alpha', 'beta'}; % 频段名称
+windowLength = 2* fs;  % 2秒窗口长度（500个采样点）
+bands = {'delta', 'theta', 'alpha', 'smr','Bl','Bh'}; % 频段名称
 bandRanges = [0.5, 4;    % delta: 0.5-4 Hz
               4, 8;      % theta: 4-8 Hz
-              8, 13;     % alpha: 8-13 Hz
-              13, 30];   % beta: 13-30 Hz
+              8, 12;     % alpha: 8-13 Hz
+              12, 16;
+              16, 20;
+              20, 30];   % beta: 13-30 Hz
 
-% 选择文件夹
-folderPath = uigetdir('选择包含MAT文件的文件夹');
-matFiles = dir(fullfile(folderPath, '*.mat'));
-
-% 处理每个文件
-for fileIdx = 1:length(matFiles)
-    % 加载数据
-    data = load(fullfile(folderPath, matFiles(fileIdx).name));
-    fieldName = fieldnames(data);
-    signal = data.(fieldName{1}); % 假设数据是文件中唯一的变量
-    
-    % 计算窗口数量并确定分割点
-    numWindows = size(signal, 1);
-    halfPoint = floor(numWindows/2);
-    
-    % 初始化存储功率谱的数组
-    [pxx_pre, f] = pwelch(signal(1,:), [], [], [], fs); % 获取频率点
-    pxx_pre_all = zeros(length(f), halfPoint, length(bands));
-    pxx_post_all = zeros(length(f), numWindows-halfPoint, length(bands));
-    
-    % 计算前一半窗口的功率谱
-    for winIdx = 1:halfPoint
-        [pxx, f] = pwelch(signal(winIdx,:), [], [], [], fs);
-        for bandIdx = 1:length(bands)
-            bandRange = bandRanges(bandIdx, :);
-            freqIndices = f >= bandRange(1) & f <= bandRange(2);
-            pxx_pre_all(:, winIdx, bandIdx) = pxx .* freqIndices; % 保留该频段，其他置零
-        end
-    end
-    
-    % 计算后一半窗口的功率谱
-    for winIdx = (halfPoint+1):numWindows
-        [pxx, f] = pwelch(signal(winIdx,:), [], [], [], fs);
-        for bandIdx = 1:length(bands)
-            bandRange = bandRanges(bandIdx, :);
-            freqIndices = f >= bandRange(1) & f <= bandRange(2);
-            pxx_post_all(:, winIdx-halfPoint, bandIdx) = pxx .* freqIndices;
-        end
-    end
-    
-    % 计算平均功率谱
-    mean_pxx_pre = squeeze(mean(pxx_pre_all, 2));
-    mean_pxx_post = squeeze(mean(pxx_post_all, 2));
-    
-    % 绘制结果
-    figure('Position', [100, 100, 1200, 800], 'Name', matFiles(fileIdx).name);
-    for bandIdx = 1:length(bands)
-        subplot(2, 2, bandIdx);
-        
-        % 绘制平均功率谱
-        plot(f, 10*log10(mean_pxx_pre(:, bandIdx)), 'b', 'LineWidth', 2);
-        hold on;
-        plot(f, 10*log10(mean_pxx_post(:, bandIdx)), 'r', 'LineWidth', 2);
-        
-        % 设置图形属性
-        xlim(bandRanges(bandIdx, :));
-        xlabel('频率 (Hz)');
-        ylabel('功率 (dB)');
-        title([bands{bandIdx} '频段 (' num2str(bandRanges(bandIdx,1)) '-' ...
-               num2str(bandRanges(bandIdx,2)) 'Hz)']);
-        legend('无刺激', '有刺激', 'Location', 'best');
-        grid on;
-        
-        % 突出显示目标频段
-        xRange = xlim;
-        yRange = ylim;
-        patch([bandRanges(bandIdx,1), bandRanges(bandIdx,2), ...
-               bandRanges(bandIdx,2), bandRanges(bandIdx,1)], ...
-              [yRange(1), yRange(1), yRange(2), yRange(2)], ...
-              [0.9, 0.9, 0.9], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-        uistack(findobj(gca,'Type','patch'), 'bottom');
-    end
-    
-    % 添加整体标题
-    ha = axes('Position',[0 0 1 1],'Xlim',[0 1],'Ylim',[0 1],'Box','off',...
-              'Visible','off','Units','normalized', 'clipping' , 'off');
-    text(0.5, 0.98, ['文件: ' matFiles(fileIdx).name ' - 功率谱比较'], ...
-        'HorizontalAlignment','center','VerticalAlignment','top',...
-        'FontSize',12,'FontWeight','bold');
+% 选择TXT文件
+[fileName, folderPath] = uigetfile('*.txt', '选择要处理的TXT文件');
+if fileName == 0
+    return; % 用户取消了选择
 end
+
+% 读取TXT文件数据
+filePath = fullfile(folderPath, fileName);
+data = load(filePath); % 假设TXT文件包含一列数据
+
+% 定义两个时间窗口（单位：秒）
+window1_start = 10;  % 第一个窗口开始时间
+window1_end = 70;    % 第一个窗口结束时间
+window2_start = 80;  % 第二个窗口开始时间
+window2_end = 140;   % 第二个窗口结束时间
+
+% 转换为采样点索引
+window1_start_idx = round(window1_start * fs) + 1;
+window1_end_idx = round(window1_end * fs);
+window2_start_idx = round(window2_start * fs) + 1;
+window2_end_idx = round(window2_end * fs);
+
+% 提取两个窗口的数据
+data_window1 = data(window1_start_idx:window1_end_idx);
+data_window2 = data(window2_start_idx:window2_end_idx);
+
+% 计算每个窗口的2秒分段数量
+numWindows1 = floor(length(data_window1) / windowLength);
+numWindows2 = floor(length(data_window2) / windowLength);
+
+
+nfft = 2^nextpow2(windowLength/2); 
+% 初始化存储功率谱的数组
+[pxx_temp, f] = pwelch(data_window1(1:windowLength), [], [], nfft, fs);
+pxx_window1_all = zeros(length(f), numWindows1, length(bands));
+pxx_window2_all = zeros(length(f), numWindows2, length(bands));
+
+% 计算第一个窗口的功率谱
+for winIdx = 1:numWindows1
+    startIdx = (winIdx-1)*windowLength + 1;
+    endIdx = winIdx*windowLength;
+    precessData = preprocess(data_window1(startIdx:endIdx),250);
+    [pxx, f] = pwelch(precessData, [], [], nfft, fs);
+    
+    for bandIdx = 1:length(bands)
+        bandRange = bandRanges(bandIdx, :);
+        
+        freqIndices = f >= bandRange(1) & f <= bandRange(2);
+        pxx_window1_all(:, winIdx, bandIdx) = pxx .* freqIndices;
+    end
+end
+
+% 计算第二个窗口的功率谱
+for winIdx = 1:numWindows2
+    startIdx = (winIdx-1)*windowLength + 1;
+    endIdx = winIdx*windowLength;
+    precessData = preprocess(data_window2(startIdx:endIdx),250);
+    [pxx, f] = pwelch(precessData, [], [], nfft, fs);
+    
+    for bandIdx = 1:length(bands)
+        bandRange = bandRanges(bandIdx, :);
+        freqIndices = f >= bandRange(1) & f <= bandRange(2);
+        pxx_window2_all(:, winIdx, bandIdx) = pxx .* freqIndices;
+    end
+end
+
+% 计算平均功率谱
+mean_pxx_window1 = squeeze(mean(pxx_window1_all, 2));
+mean_pxx_window2 = squeeze(mean(pxx_window2_all, 2));
+
+% 绘制结果
+figure('Position', [100, 100, 1200, 800], 'Name', fileName);
+for bandIdx = 1:length(bands)
+    subplot(2, 3, bandIdx);
+    
+    % 绘制平均功率谱
+    plot(f, 10*log10(mean_pxx_window1(:, bandIdx)), 'b', 'LineWidth', 2);
+    hold on;
+    plot(f, 10*log10(mean_pxx_window2(:, bandIdx)), 'r', 'LineWidth', 2);
+    
+    % 设置图形属性
+    xlim(bandRanges(bandIdx, :));
+    xlabel('频率 (Hz)');
+    ylabel('功率 (dB)');
+    title([bands{bandIdx} '频段 (' num2str(bandRanges(bandIdx,1)) '-' ...
+           num2str(bandRanges(bandIdx,2)) 'Hz)']);
+    legend([num2str(window1_start) '-' num2str(window1_end) 's'], ...
+           [num2str(window2_start) '-' num2str(window2_end) 's'], ...
+           'Location', 'best');
+    grid on;
+    
+    % 突出显示目标频段
+    xRange = xlim;
+    yRange = ylim;
+    patch([bandRanges(bandIdx,1), bandRanges(bandIdx,2), ...
+           bandRanges(bandIdx,2), bandRanges(bandIdx,1)], ...
+          [yRange(1), yRange(1), yRange(2), yRange(2)], ...
+          [0.9, 0.9, 0.9], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+    uistack(findobj(gca,'Type','patch'), 'bottom');
+end
+
+% 添加整体标题
+ha = axes('Position',[0 0 1 1],'Xlim',[0 1],'Ylim',[0 1],'Box','off',...
+          'Visible','off','Units','normalized', 'clipping' , 'off');
+text(0.5, 0.98, ['文件: ' fileName ' - 功率谱比较 (2秒窗口)'], ...
+    'HorizontalAlignment','center','VerticalAlignment','top',...
+    'FontSize',12,'FontWeight','bold');

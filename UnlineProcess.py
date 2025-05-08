@@ -3,8 +3,9 @@ import time
 
 from CeemdanWave import ceemdan_eeg_artifact_removal
 from Entropy import SampleEntropy2
+from NingProcess import NingProcess
 from PlotFreq import PlotFreq
-from PreProcess import preprocess, compute_power_ratio
+from PreProcess import preprocess, compute_power_ratio, bior68_wavelet_denoise, preprocess3
 from SingleDenoise import remove_eog_with_visualization
 from SingleDenoise_pro import remove_eog_with_visualization2
 import scipy.io as sio
@@ -75,7 +76,7 @@ def compute_band_powers(data):
 
 
 # 加载数据
-eeg = np.loadtxt('data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0411 XY额头干电极3min 2.txt')
+eeg = np.loadtxt('data/oksQL7aHWZ0qkXkFP-oC05eZugE8/0417/0417 SF额头风景画移动+心算1.txt')
 fs = 250  # 采样率
 
 
@@ -89,18 +90,27 @@ window_size = fs * 2 # 2秒窗口（500个点）
 num_windows = len(eeg) // window_size
 band_power_history = {band: [] for band in BANDS}
 band_power_history['theta_beta_ratio'] = []
-
 sampleEntropy=[]
+
+# # plt.plot(eeg)
+# temp = preprocess3(eeg,250)
+
+
 for i in range(num_windows):
     seg = eeg[i * window_size: (i + 1) * window_size]
+    # plt.plot(seg)
 
     # seg ,_= preprocess1(seg, 250)
-    seg= preprocess(seg, 250)
+    seg= preprocess3(seg, 250)
+    # seg = NingProcess(seg)
+    # plt.plot(seg)
+    # plt.show()
+
 
 
     t = time.time()
-    seg,_ = remove_eog_with_visualization2(seg,250,0,0)
-    # seg =  ceemdan_eeg_artifact_removal(seg,250,sample_entropy_threshold=0.2,draw_flag=1)
+    seg,_ = remove_eog_with_visualization2(seg,250,1,0)
+    seg =  ceemdan_eeg_artifact_removal(seg,250,sample_entropy_threshold=0.2,draw_flag=1)
     print(f'coast:{time.time() - t:.4f}s')
 
     # powers = compute_band_powers(seg)
