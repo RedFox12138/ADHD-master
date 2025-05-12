@@ -1,12 +1,9 @@
 import numpy as np
 import os
-from scipy import io
 
-from CeemdanWave import ceemdan_eeg_artifact_removal
-from EogRemovalNew import  optimized_dwt_eog_removal
 from PreProcess import preprocess3
 from SingleDenoise import eog_removal
-from SingleDenoise_pro import remove_eog_with_visualization2
+
 
 
 def process_txt_file(txt_path, output_folder, fs=250):
@@ -58,7 +55,7 @@ def batch_process_txt_folder(input_folder, output_folder):
 
 # 使用示例
 if __name__ == "__main__":
-    input_folder = 'D:\\pycharm Project\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
-    output_folder = 'D:\\pycharm Project\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
+    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
 
     batch_process_txt_folder(input_folder, output_folder)

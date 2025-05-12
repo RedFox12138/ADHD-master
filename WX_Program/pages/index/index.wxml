@@ -1,11 +1,19 @@
 <view class="container">
+
   <view class="status">
     连接状态：{{connected ? '已连接' + deviceName : '未连接'}}
   </view>
-
+  <canvas 
+    canvas-id="eegChart" 
+    style="width:100%; height:200px;"
+    disable-scroll="true"
+  ></canvas>
   <view class="parameter">
-    Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}
+    <view>Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
+    <view>Delta 累计功率：{{DeltaPower !== null ? DeltaPower : '未计算'}}</view>
   </view>
+
+
   
   <view class="experiment-info" wx:if="{{experimentStarted}}">
     <view>实验阶段：{{currentPhase}}</view>
@@ -14,12 +22,7 @@
     <view>当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
   </view>
 
-  <!-- <canvas 
-    class="canvas" 
-    canvas-id="EEG" 
-    binderror="canvasIdErrorCallback" 
-    disable-scroll="true" 
-  /> -->
+
   
   <!-- 游戏区域 -->
   <view class="game-container" wx:if="{{experimentStarted && currentPhase === '治疗阶段'}}">
@@ -70,9 +73,10 @@
       value="{{inputData}}" 
     />
     <button class="btn" bindtap="sendData">发送数据</button>
-    <button class="btn" bindtap="startExperiment" wx:if="{{!experimentStarted}}">开始实验</button>
     <button class="btn" bindtap="navigateToScan">
       {{connected ? '重新连接' : '搜索设备'}}
     </button>
+    <button class="btn" bindtap="startExperiment" wx:if="{{!experimentStarted}}">开始实验</button>
+    <button class="btn" bindtap="stopExperiment" wx:if="{{experimentStarted}}">结束实验</button>
   </view>
 </view>

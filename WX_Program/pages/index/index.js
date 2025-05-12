@@ -1,19 +1,35 @@
 const app = getApp();
 var receivedData = []; // 全局数据接收缓冲区
 var batch_len = 500;   // 每批发送数据量
-
+var wxCharts = require('../../utils/wxcharts.js');
+let lineChart = null;
 Page({
+  resetChart: function() {
+    this.setData({
+      chartData: {
+        tbrData: [],
+        deltaData: [],
+        timePoints: []
+      },
+      dataCount: 0
+    });
+    
+    // 重新初始化图表
+    this.initEmptyChart();
+  },
   data: {
+    chartData: {
+      tbrData: [],
+      deltaData: [],
+      timePoints: []
+    },
+    dataCount: 0,
+    maxDataPoints: 60,
+
     // 设备连接状态
     connected: false,
     deviceName: '',
     inputData: '',
-
-    // 数据可视化
-    x_data: [],
-    y_data: [],
-    x_value: [],
-    EEGdata: [],
 
     // 脑电参数
     powerRatio: null,
@@ -45,11 +61,7 @@ Page({
   },
 
   onLoad: function() {
-    // 初始化图表数据
-    var arr1 = Array(20).fill().map((_,i) => i+1);
-    var arr2 = Array(20).fill(0);
-    this.setData({ x_value: arr1, EEGdata: arr2 });
-
+    this.initEmptyChart();
     // 蓝牙连接监听
     wx.onBLEConnectionStateChange(res => {
       if (!res.connected) {
@@ -68,18 +80,21 @@ Page({
       wx.showToast({ title: '请先连接设备', icon: 'none' });
       return;
     }
-
+  
+    // 重置图表
+    this.resetChart();
+    
     this.setData({
       experimentStarted: true,
       currentPhase: '基准阶段',
       remainingTime: 20,
       baselineValue: null,
-      baselineSamples: []
+      baselineSamples: [],
+      gameOver: false  // 确保游戏状态重置
     });
     this.startPhaseTimer();
   },
   
-  // 停止实验
   stopExperiment: function() {
     if (this.data.timer) {
       clearInterval(this.data.timer);
@@ -91,7 +106,8 @@ Page({
     this.setData({
       experimentStarted: false,
       timer: null,
-      phaseTimer: null
+      phaseTimer: null,
+      gameOver: true  // 显示游戏结束界面
     });
   },
   
@@ -160,23 +176,26 @@ startTreatmentPhase: function() {
     }
     this.setData({ remainingTime: this.data.remainingTime - 1 });
   }, 1000);
-
   // 游戏循环
   this.data.timer = setInterval(this.updateGameState.bind(this), 50);
 },
-  
-  // 重新开始实验
-restartExperiment: function() {
+
+
+  restartExperiment: function() {
     this.stopExperiment();
+    // 重置图表
+    this.resetChart();
     this.setData({
-        gameOver: false,
-        experimentStarted: false
+      gameOver: false,
+      experimentStarted: false,
+      birdY: 50,
+      currentScene: 'forest'
     });
-    // 可以添加一些延迟让用户看到状态变化
+    // 延迟开始避免状态冲突
     setTimeout(() => {
-        this.startExperiment();
+      this.startExperiment();
     }, 500);
-},
+  },
   
 updateGameState: function() {
   if (!this.data.gameStarted || this.data.gameOver || this.data.sceneCooldown) return;
@@ -265,7 +284,6 @@ checkSceneChange: function(newBirdY, attentionDiff) {
               method: 'POST',
               data: { code: res.code },
               success: (res) => {
-                console.log(res);
                 const user_id = res.data.openid;
                 wx.setStorageSync('user_id', user_id);  
                 resolve(user_id);
@@ -298,7 +316,6 @@ checkSceneChange: function(newBirdY, attentionDiff) {
           userId: user_id
         },
         success: (res) => {
-          console.log(res);
           // 检查返回数据是否有效
           if (!res.data || !Array.isArray(res.data.TBR) || res.data.TBR.length === 0) {
             console.log('无效的TBR数据，已忽略');
@@ -312,19 +329,35 @@ checkSceneChange: function(newBirdY, attentionDiff) {
             return;
           }
           
-          // const DeltaPowerCurrent = res.data.DeltaCumAvg[-1];
+          // const DeltaPowerCurrent = res.data.DeltaCumAvg*100000;
+          // const averageTBR = validTBRs.reduce((sum, tbr) => sum + tbr, 0) / validTBRs.length;
+
+          const DeltaPowerCurrent = res.data.DeltaCumAvg*100000;
           const averageTBR = validTBRs.reduce((sum, tbr) => sum + tbr, 0) / validTBRs.length;
+          
+          this.setData({
+            DeltaPower: DeltaPowerCurrent.toFixed(2),
+            powerRatio: averageTBR.toFixed(2),
+            currentAttention: (averageTBR * 10).toFixed(2)
+          });
+          
+          // 处理图表数据
+          this.updateChartData(
+            parseFloat(averageTBR.toFixed(2)), 
+            parseFloat(DeltaPowerCurrent.toFixed(2))
+          );
+
           const attentionValues = validTBRs.map(tbr => 
             Math.max(0, Math.min(100, tbr * 10))
           );
           
           // 强制更新UI显示平均值
           this.setData({
-            // DeltaPower: DeltaPowerCurrent.toFixed(2),
+            DeltaPower: DeltaPowerCurrent.toFixed(2),
             powerRatio: averageTBR.toFixed(2),
             currentAttention: (averageTBR * 10).toFixed(2)
           });
-          
+
           // 如果在基准阶段，收集所有样本
           if (this.data.experimentStarted && this.data.currentPhase === '基准阶段') {
             this.setData({
@@ -489,5 +522,107 @@ checkSceneChange: function(newBirdY, attentionDiff) {
       return;
     }
     this.enableBLEData(this.data.inputData)
+  },
+
+
+  // 初始化空白图表
+  initEmptyChart: function() {
+    const windowWidth = wx.getSystemInfoSync().windowWidth;
+    
+    lineChart = new wxCharts({
+      canvasId: 'eegChart',
+      type: 'line',
+      categories: [],
+      animation: false,
+      series: [
+        {
+          name: 'TBR',
+          data: [],
+          color: '#1aad19',
+          labelColor: '#ffffff'  // 数据标签颜色
+        },
+        {
+          name: 'DeltaPower',
+          data: [],
+          color: '#ff0000'
+        }
+      ],
+      xAxis: {
+        disableGrid: true,
+        axisLineColor: '#cccccc',
+        fontColor: '#ffffff',  // X轴文字颜色
+        titleFontColor: '#ffffff'  // X轴标题颜色
+      },
+      yAxis: {
+        title: '数值',
+        format: val => val.toFixed(2),
+        min: 0,
+        max: 100,
+        gridColor: '#D8D8D8',
+        fontColor: '#ffffff',  // Y轴文字颜色
+        titleFontColor: '#ffffff'  // Y轴标题颜色
+      },
+      width: windowWidth * 0.95,
+      height: 200,
+      dataLabel: false,
+      dataPointShape: false,
+      extra: {
+        lineStyle: 'curve'
+      },
+      legend: {
+        show: true,
+        position: 'topRight',
+        color: '#ffffff'  // 图例文字颜色
+      },
+      background: '#00000000',  // 透明背景
+      padding: [40, 10, 20, 20],  // 调整内边距确保文字显示完整
+      title: {
+        content: '',
+        fontColor: '#ffffff'  // 标题颜色
+      }
+    });
+    
+    this.setData({ chartInited: true });
+  },
+
+ // 更新图表数据
+ updateChartData: function(tbr, deltaPower) {
+  if (!this.data.chartInited) return;
+  
+  const chartData = this.data.chartData;
+  const dataCount = this.data.dataCount + 1;
+  
+  // 添加新数据
+  chartData.tbrData.push(tbr);
+  chartData.deltaData.push(deltaPower);
+  chartData.timePoints.push(dataCount.toString());
+  
+  // 限制数据点数量
+  if (chartData.tbrData.length > this.data.maxDataPoints) {
+    chartData.tbrData.shift();
+    chartData.deltaData.shift();
+    chartData.timePoints.shift();
   }
+  
+  this.setData({
+    chartData,
+    dataCount
+  }, () => {
+    this.refreshChart();
+  });
+},
+
+// 刷新图表显示
+refreshChart: function() {
+  if (!lineChart || !this.data.chartInited) return;
+  
+  lineChart.updateData({
+    categories: this.data.chartData.timePoints,
+    series: [
+      { name: 'TBR', data: this.data.chartData.tbrData },
+      { name: 'DeltaPower', data: this.data.chartData.deltaData }
+    ]
+  });
+}
+
 });

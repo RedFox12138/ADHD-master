@@ -25,7 +25,7 @@ def preparation_phase(duration=5):
 
 # 静息阶段（不变）
 def resting_phase1(duration=60):
-    images = ["lake.jpg", "clouds.jpg"]
+    images = ["mountain.jpg", "clouds.jpg"]
     image_stims = [visual.ImageStim(win, image=img, size=3.0) for img in images]
     start_time = time.time()
     current_img = 0
@@ -41,7 +41,7 @@ def resting_phase1(duration=60):
 #
 def resting_phase2(duration=60):
 
-    images = ["lake.jpg", "clouds.jpg"] if os.path.exists("lake.jpg") else []
+    images = ["mountain.jpg", "clouds.jpg"] if os.path.exists("mountain.jpg") else []
     if images:
         image_stims = [visual.ImageStim(win, image=img, size=3.0) for img in images]
 
@@ -117,31 +117,37 @@ def resting_phase2(duration=60):
 
 
 def arithmetic_phase(duration=60):
-    # 创建文本刺激
-    problem_text = visual.TextStim(win, text="", height=0.15, color='white')
-    instruction_text = visual.TextStim(win, text="请心算以下题目", height=0.1, color='white', pos=(0, -0.3))
+    # 创建紧凑的文本刺激（所有内容集中在视野中心区域）
+    problem_text = visual.TextStim(win,
+                                   text="",
+                                   height=0.10,  # 题目字号
+                                   color='white',
+                                   pos=(0, 0.05))  # 题目稍微上移
+
+    instruction_text = visual.TextStim(win,
+                                       text="请心算以下题目",
+                                       height=0.05,  # 说明文字字号
+                                       color='white',
+                                       pos=(0, -0.15))  # 说明文字稍微下移
 
     # 计时器
     start_time = time.time()
-    problem_duration = 10  # 每10秒更换一题
+    problem_duration = 3  # 每3秒更换一题
 
     while time.time() - start_time < duration:
-        # 生成三位数加减法题目
-        num1 = random.randint(10000, 99999)
-        num2 = random.randint(10000, 99999)
-        operator = random.choice(['+'])
+        # 生成两位数加法题目
+        num1 = random.randint(10, 99)
+        num2 = random.randint(10, 99)
 
-        # 确保减法结果为正数
-        if operator == '-' and num1 < num2:
-            num1, num2 = num2, num1
+        # 显示题目（紧凑布局）
+        problem_text.text = f"{num1} + {num2} = ?"
 
-        # 显示题目
-        problem_text.text = f"{num1} {operator} {num2} = ?"
+        # 绘制所有元素
         problem_text.draw()
         instruction_text.draw()
         win.flip()
 
-        # 等待10秒或直到按下退出键
+        # 等待题目持续时间或直到按下退出键
         timer = core.CountdownTimer(problem_duration)
         while timer.getTime() > 0:
             if event.getKeys(keyList=['escape']):
@@ -249,6 +255,27 @@ def resting_phase3(duration=60):
 
         win.flip()
 
+        if event.getKeys(keyList=['escape']):
+            win.close()
+            core.quit()
+
+def resting_phase_corss(duration=60):
+    # 创建绿色十字准心（固定注视点）
+    fixation = visual.TextStim(
+        win,
+        text="+",          # 十字符号
+        color=(0, 1, 0),   # 纯绿色 (RGB)
+        height=0.15,       # 适当大小（可根据需要调整）
+        pos=(0, 0)         # 屏幕正中央
+    )
+
+    # 主循环（仅显示十字）
+    global_clock = core.Clock()
+    while global_clock.getTime() < duration:
+        fixation.draw()  # 绘制十字
+        win.flip()       # 刷新屏幕
+
+        # 允许按ESC键退出
         if event.getKeys(keyList=['escape']):
             win.close()
             core.quit()
@@ -482,10 +509,8 @@ def schulte_grid_phase(duration=60):
 
 # 主实验流程（添加舒尔特方格阶段）
 def run_experiment():
-    # print("准备阶段开始")
     preparation_phase(10)
-    # print("静息阶段开始")
-    resting_phase3(60)
+    resting_phase_corss(60)
     break_phase(10)
     arithmetic_phase(60)
 

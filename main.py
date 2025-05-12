@@ -10,6 +10,8 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 import datetime
 import requests
+from scipy import signal
+from scipy.signal import spectrogram
 
 from PreProcess import preprocess3, preprocess1
 
@@ -42,7 +44,8 @@ def get_user_session(user_id):
                 'last_time': current_time,
                 'raw_file': os.path.join(user_dir, f"raw_{timestamp}.txt"),
                 'processed_file': os.path.join(user_dir, f"processed_{timestamp}.txt"),
-                'processing_buffer': []
+                'processing_buffer': [],
+                'delta_cumavg_history': []  # 新增：存储Delta波段累积平均历史
             }
         else:
             user_sessions[user_id]['last_time'] = current_time
@@ -50,12 +53,43 @@ def get_user_session(user_id):
         return user_sessions[user_id]['raw_file'], user_sessions[user_id]['processed_file']
 
 
+def calculate_delta_cumavg(eeg_data, fs=250, session=None):
+    """计算Delta波段的滑动窗口累积平均功率（6秒窗口，0.5秒步长）"""
+    # 设置STFT参数
+    window = "hamming"
+    nfft = 1024
+
+    # 计算STFT
+    f, t, S = spectrogram(np.array(eeg_data), fs=fs, window=window, nperseg=512, noverlap=256, nfft=nfft, mode='magnitude')
+
+    # 定义Delta波段范围
+    delta_band = (f >= 0.5) & (f <= 4)  # Delta: 0.5-4Hz
+
+    # 提取Delta波段功率（幅度平方）
+    S_delta = np.abs(S[delta_band, :]) ** 2
+
+    # 计算Delta波段瞬时功率（跨频率维度平均）
+    delta_power = np.mean(S_delta, axis=0)
+
+
+    # 计算当前窗口的平均功率
+    current_window_avg = np.mean(delta_power) if len(delta_power) > 0 else None
+
+    # 更新会话中的累积平均历史
+    if current_window_avg is not None and session is not None:
+        session['delta_cumavg_history'].append(current_window_avg)
+        cumulative_avg = np.mean(session['delta_cumavg_history'])  # 真正的累积平均
+        return cumulative_avg
+    return None
+
 @app.route('/process', methods=['POST'])
 def process_data():
     data = request.json
     points = data.get('points', [])
     user_id = data.get('userId')
-    tbr_list = []  # 存储所有窗口的TBR值
+    tbr_list = []
+    # delta_cumavg_list = []
+
     if not user_id:
         return jsonify({"error": "userId is required"}), 400
 
@@ -71,14 +105,21 @@ def process_data():
             f.write(f"{p}\n")
 
     tbr = None
+    delta_cumavg = None
     with session_lock:
         session = user_sessions[user_id]
         processing_buffer = session['processing_buffer']
 
-    while len(processing_buffer) >= 1500:
+    while len(processing_buffer) >= 1500:  # 6秒窗口（1500点）
         raw_window = processing_buffer[:1500]
         processed_points, tbr = preprocess3(raw_window, fs)
-        tbr_list.append(tbr)  # 收集每次的TBR值
+        tbr_list.append(tbr)
+
+        # 修改后的Delta累积平均计算（传入session对象）
+        delta_cumavg = calculate_delta_cumavg(raw_window, fs, session)
+        # if delta_cumavg is not None:
+        #     delta_cumavg_list.append(delta_cumavg)
+
         # 写入处理后的数据
         with open(processed_file, 'a') as f:
             for pp in processed_points:
@@ -88,7 +129,7 @@ def process_data():
         processed_raw_buffer.extend(raw_window)
         processed_processed_buffer.extend(processed_points)
 
-        # 移动窗口
+        # 移动窗口（0.5秒步长=125点）
         with session_lock:
             session['processing_buffer'] = processing_buffer[125:]
             processing_buffer = session['processing_buffer']
@@ -96,6 +137,7 @@ def process_data():
     return jsonify({
         "status": "success",
         "TBR": tbr_list,
+        "DeltaCumAvg": delta_cumavg  # 返回真正的累积平均值
     })
 
 

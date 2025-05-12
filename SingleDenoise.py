@@ -52,7 +52,7 @@ def eog_removal(eeg, fs=250, visualize=False):
     # 寻找超过高阈值的区域,这个是去眼电的时候用的
     thresholded = envelope > Th
 
-    thresholded = diff_eeg > 2
+    # thresholded = diff_eeg > 2
 
     starts, ends = find_intervals(thresholded)
 
@@ -140,27 +140,27 @@ def eog_removal(eeg, fs=250, visualize=False):
 
     # ===== 增强可视化 =====
     if visualize:
-        plt.figure(figsize=(15, 10))
+        plt.figure(figsize=(20, 18))  # 增加高度
 
         # 原始信号和长时差分
         plt.subplot(5, 1, 1)
         plt.plot(eeg, label='Original EEG')
-        plt.legend()
-        plt.title('Step1: Raw EEG Signal')
+        plt.legend(loc='upper right')
+        plt.title('Step1: Raw EEG Signal', pad=20)  # 增加标题与图的间距
 
         # 长时差分信号
         plt.subplot(5, 1, 2)
         plt.plot(diff_eeg, color='orange', label='Long-term Differential')
-        plt.title('Step2: Differential Signal (k={} samples)'.format(k))
-        plt.legend()
+        plt.title('Step2: Differential Signal (k={} samples)'.format(k), pad=20)
+        plt.legend(loc='upper right')
 
         # 滤波过程可视化
         plt.subplot(5, 1, 3)
         time_downsampled = np.arange(len(downsampled)) * M
         plt.plot(time_downsampled, original_filtered, '--', label='Before delay compensation')
         plt.plot(time_downsampled, filtered[:len(downsampled)], label='After delay compensation')
-        plt.title('Step3: Filtering Process (Delay={} samples)'.format(delay))
-        plt.legend()
+        plt.title('Step3: Filtering Process (Delay={} samples)'.format(delay), pad=20)
+        plt.legend(loc='upper right')
 
         # 振幅包络和阈值
         plt.subplot(5, 1, 4)
@@ -169,28 +169,27 @@ def eog_removal(eeg, fs=250, visualize=False):
         plt.axhline(Tl, color='g', linestyle='--', label='Low Threshold (Tl)')
         for s, e in valid_intervals:
             plt.axvspan(s, e, alpha=0.2, color='red')
-        plt.title('Step4: Envelope with Dual Thresholds')
-        plt.legend()
+        plt.title('Step4: Envelope with Dual Thresholds', pad=20)
+        plt.legend(loc='upper right')
 
         # 最终结果
         plt.subplot(5, 1, 5)
-        plt.plot(eeg,label='Raw EEG')
+        plt.plot(eeg, label='Raw EEG')
         plt.plot(clean_eeg, label='Cleaned EEG')
-        plt.title('Step5: Final Result')
-        plt.legend()
+        plt.title('Step5: Final Result', pad=20)
+        plt.legend(loc='upper right')
 
+        # 调整子图间距
+        plt.subplots_adjust(hspace=1)  # 增加子图间的垂直间距
 
-        plt.figure()
+        # 第二个图形
+        plt.figure(figsize=(20, 5))
         plt.plot(eeg, label='Original')
         plt.plot(clean_eeg, label='Processed')
         plt.title('Original vs Processed EEG Signal')
         plt.xlabel('Samples')
-        plt.ylabel('Amplitude (mV)')
-        plt.legend()
 
-        plt.tight_layout()
         plt.show()
-
     return clean_eeg
 
 

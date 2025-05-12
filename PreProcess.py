@@ -1,12 +1,6 @@
 import sys #python库的路径
 
 import pywt
-from pyemd import EEMD, CEEMDAN
-from numpy import std
-from scipy.stats import stats, kurtosis
-from sklearn.decomposition import FastICA
-
-from Entropy import SampleEntropy2
 
 sys.path.append('D:\\anaconda\\lib\\site-packages')
 from matplotlib import pyplot as plt

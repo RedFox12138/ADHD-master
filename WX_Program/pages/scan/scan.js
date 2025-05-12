@@ -5,21 +5,27 @@ Page({
     devices: [], // 存储发现的设备
     discovering: false, // 是否正在搜索
     connectedId: null, // 当前连接的设备ID
-    existing: new Map() // 将 existing 存储为页面数据
   },
 
+  // 使用页面实例变量而不是data中的Map，避免序列化问题
+  existingDevices: new Map(),
+
   onShow() {
+    // 显示页面时，先显示已发现的设备
+    this.setData({
+      devices: Array.from(this.existingDevices.values())
+    })
     this.startDiscovery()
   },
 
   onUnload() {
     this.stopDiscovery() // 页面卸载时停止搜索
-    this.setData({ existing: new Map() });
+    // 不再清空existingDevices，保留设备信息
   },
 
   // 开始搜索蓝牙设备
   startDiscovery() {
-    this.setData({ discovering: true }) // 不清空设备列表
+    this.setData({ discovering: true })
     wx.openBluetoothAdapter({
       success: () => {
         console.log('蓝牙适配器初始化成功')
@@ -27,7 +33,7 @@ Page({
           allowDuplicatesKey: false, // 不重复上报同一设备
           success: () => {
             console.log('开始搜索蓝牙设备')
-            wx.onBluetoothDeviceFound(this.handleFoundDevice)
+            wx.onBluetoothDeviceFound(this.handleFoundDevice.bind(this))
             // 30秒后自动停止搜索
             setTimeout(() => this.stopDiscovery(), 30000)
           },
@@ -56,20 +62,22 @@ Page({
   handleFoundDevice(devices) {
     if (!devices.devices.length) return
 
-    // 合并设备列表并去重
-    //const newDevices = devices.devices.filter(d => d.name || d.localName) // 过滤掉没有名称的设备
     const newDevices = devices.devices
-    this.data.existing = new Map(this.data.devices.map(d => [d.deviceId, d]))
+    let hasNewDevice = false
+    
     newDevices.forEach(device => {
-      this.data.existing.set(device.deviceId, device)
-      // if (!existing.has(device.deviceId)) {
-        
-      // }
+      if (!this.existingDevices.has(device.deviceId)) {
+        this.existingDevices.set(device.deviceId, device)
+        hasNewDevice = true
+      }
     })
 
-    this.setData({
-      devices: Array.from(this.data.existing.values())
-    })
+    // 只有发现新设备时才更新UI
+    if (hasNewDevice) {
+      this.setData({
+        devices: Array.from(this.existingDevices.values())
+      })
+    }
   },
 
   // 连接设备
