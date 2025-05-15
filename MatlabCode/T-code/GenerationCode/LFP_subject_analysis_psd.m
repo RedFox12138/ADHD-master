@@ -4,7 +4,7 @@ close all;
 clear all;
 %% load data
 
-data = importdata('D:\pycharm Project\ADHD-master\data\额头信号去眼电\0508 SF1_processed.txt');
+data = importdata('D:\Pycharm_Projects\ADHD-master\data\额头信号去眼电\1\0509 HG范式二 1_processed.txt');
 % data = importdata('D:\pycharm Project\ADHD-master\data\oksQL7aHWZ0qkXkFP-oC05eZugE8\0424\0424 SF头部2.txt');
 % data = load('E:\brainData\小鼠脑电信号处理\LFP\2024-06-13\2024-06-13-10-28.txt')
 % load('E:\brainData\小鼠脑电信号处理\LFP\20240604俊俊脑电\EEG-1 大鼠\EEG-1 大鼠\15605188179_0516-11_32_03_0516-11_47_08_0.00_4\eeg.mat');
@@ -146,7 +146,7 @@ ylabel('Amplitude');
 title('Beta波段 (13-30 Hz)');
 grid on;
 
-%% 绘制累积功率图（保留原有分析）
+%% 绘制累积功率图和时序功率图
 % 设置STFT参数
 window = hamming(512); % 窗函数
 noverlap = 256; % 重叠点数
@@ -173,20 +173,21 @@ theta_power = mean(S_theta, 1);
 alpha_power = mean(S_alpha, 1);
 beta_power = mean(S_beta, 1);
 
-delta_power = delta_power(10:end);
-theta_power = theta_power(10:end);
-alpha_power = alpha_power(10:end);
-beta_power = beta_power(10:end);
+% 去除前几个时间点（可选）
+delta_power = delta_power(5:end);
+theta_power = theta_power(5:end);
+alpha_power = alpha_power(5:end);
+beta_power = beta_power(5:end);
 
-T = T(10:end);
+T = T(5:end);
 
+%% 图1：绘制累积功率图（保留原有分析）
 % 计算累积平均功率
 delta_cumavg = cumsum(delta_power) ./ (1:length(delta_power));
 theta_cumavg = cumsum(theta_power) ./ (1:length(theta_power));
 alpha_cumavg = cumsum(alpha_power) ./ (1:length(alpha_power));
 beta_cumavg = cumsum(beta_power) ./ (1:length(beta_power));
 
-% 绘制累积功率图
 figure;
 hold on;
 plot(T, delta_cumavg, 'b', 'LineWidth', 1.5, 'DisplayName', 'Delta (0.5-4Hz)');
@@ -199,6 +200,23 @@ ylabel('Cumulative Average Power');
 title('脑电波段功率累积平均');
 legend('show', 'Location', 'best');
 grid on;
+
+%% 图2：绘制时序功率图（不带平均）
+figure;
+hold on;
+plot(T, delta_power, 'b', 'LineWidth', 1.5, 'DisplayName', 'Delta (0.5-4Hz)');
+plot(T, theta_power, 'r', 'LineWidth', 1.5, 'DisplayName', 'Theta (4-8Hz)');
+plot(T, alpha_power, 'g', 'LineWidth', 1.5, 'DisplayName', 'Alpha (8-13Hz)');
+plot(T, beta_power, 'm', 'LineWidth', 1.5, 'DisplayName', 'Beta (13-30Hz)');
+
+xlabel('Time (s)');
+ylabel('Instantaneous Power');
+title('脑电波段时序功率');
+legend('show', 'Location', 'best');
+grid on;
+
+% 可选：调整y轴范围使图形更清晰
+% ylim([0 max([delta_power, theta_power, alpha_power, beta_power]) * 1.1]);
 %%
 % 参数设置
 fs = 250;               % 采样率(Hz)
@@ -219,7 +237,7 @@ step_samples = round(step_size * fs);
 % 初始化结果存储
 results = struct();
 phases = {'non_attention', 'attention'};
-time_ranges = {[10, 70], [80, 140]};
+time_ranges = {[0, 20], [20, 200]};
 
 % 对每个阶段进行处理
 for i = 1:2
@@ -285,9 +303,9 @@ line([0 150], [mean(results.attention.ratios), mean(results.attention.ratios)],.
  %%
   fs = 250; % 采样率 (Hz)
 time_axis = (0:length(ttt)-1) / fs; % 时间轴（秒）
-
+processed_eeg = ttt;
 % 预处理 EEG 数据（假设 EEGPreprocess 返回处理后的信号）
-processed_eeg = EEGPreprocess(ttt, fs, 'none');
+% processed_eeg = EEGPreprocess(ttt, fs, 'none');
 
 % 绘制 EEG 信号，并设置坐标轴
 plot(time_axis(1:length(processed_eeg)), processed_eeg);

@@ -325,3 +325,49 @@
   border-radius: 40rpx;
   font-size: 32rpx;
 }
+
+/* 小鸟容器 - 确保相对定位 */
+.bird {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  z-index: 50;
+}
+
+/* 数学题气泡 */
+.math-bubble {
+  position: absolute;
+  top: -50px; /* 显示在小鸟上方 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  z-index: 60; /* 高于小鸟 */
+}
+
+/* 数学题样式 */
+.math-problem {
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  white-space: nowrap;
+  
+  /* 气泡小箭头 */
+  position: relative;
+}
+.math-problem:after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 10px 8px 0;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.95) transparent transparent;
+}

@@ -151,3 +151,29 @@
   border-radius: 8rpx;
   margin-bottom: 20rpx;
 }
+
+/* 历史记录按钮样式 */
+.history-btn {
+  position: fixed;
+  right: 30rpx;
+  bottom: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: rgba(255,255,255,0.9);
+  padding: 20rpx;
+  border-radius: 50%;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.2);
+  z-index: 999;
+}
+
+.history-btn image {
+  width: 50rpx;
+  height: 50rpx;
+  margin-bottom: 10rpx;
+}
+
+.history-btn text {
+  font-size: 24rpx;
+  color: #333;
+}

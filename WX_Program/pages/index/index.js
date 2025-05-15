@@ -23,6 +23,12 @@ Page({
       deltaData: [],
       timePoints: []
     },
+
+    mathProblem: '',       // 当前显示的数学题
+    mathAnswer: 0,         // 正确答案
+    mathTimer: null,       // 数学题定时器
+    showMathProblem: false, // 是否显示数学题
+
     dataCount: 0,
     maxDataPoints: 60,
 
@@ -80,34 +86,55 @@ Page({
       wx.showToast({ title: '请先连接设备', icon: 'none' });
       return;
     }
-  
-    // 重置图表
-    this.resetChart();
     
+ // 重置图表
+    this.resetChart();
     this.setData({
       experimentStarted: true,
-      currentPhase: '基准阶段',
-      remainingTime: 20,
+      currentPhase: '准备阶段',  // 先进入准备阶段
+      remainingTime: 10,        // 10秒纯倒计时
       baselineValue: null,
       baselineSamples: [],
-      gameOver: false  // 确保游戏状态重置
+      gameOver: false
     });
     this.startPhaseTimer();
+
+    // 重置图表
+    this.resetChart();
   },
   
   stopExperiment: function() {
+    // 清除所有可能的定时器
+    if (this.data.mathTimer) {
+      clearInterval(this.data.mathTimer);
+    }
+
     if (this.data.timer) {
       clearInterval(this.data.timer);
     }
     if (this.data.phaseTimer) {
       clearInterval(this.data.phaseTimer);
     }
+    if (this.data.gameTimer) {
+      clearInterval(this.data.gameTimer);
+    }
+    if (this.data.sceneTimer) {
+      clearInterval(this.data.sceneTimer);
+    }
     
     this.setData({
+      baselineValue: null,
+      baselineSamples: [],
+      currentAttention: null,
+      currentPhase: '',
       experimentStarted: false,
       timer: null,
       phaseTimer: null,
-      gameOver: true  // 显示游戏结束界面
+      gameTimer: null,
+      sceneTimer: null,
+      gameOver: true,  // 显示游戏结束界面
+      gameStarted: false,
+      showMathProblem: false
     });
   },
   
@@ -123,7 +150,15 @@ Page({
       if (remainingTime <= 0) {
         clearInterval(that.data.phaseTimer);
         
-        if (that.data.currentPhase === '基准阶段') {
+        if (that.data.currentPhase === '准备阶段') {
+          // 准备阶段结束，自动进入基准阶段
+          that.setData({
+            currentPhase: '基准阶段',
+            remainingTime: 20
+          });
+          that.startPhaseTimer(); // 继续计时
+        } 
+        else if (that.data.currentPhase === '基准阶段') {
           // 计算基准值
           const baselineValue = that.calculateBaseline();
           that.setData({
@@ -146,17 +181,20 @@ Page({
   // 计算基准值
 // 计算基准值
 calculateBaseline: function() {
-  const samples = this.data.baselineSamples;
-  if (samples.length === 0) return 0;
+  // const samples = this.data.baselineSamples;
+  // if (samples.length === 0) return 0;
 
-  const avg = samples.reduce((a,b) => a + parseFloat(b), 0) / samples.length;
-  this.setData({ baselineValue: parseFloat(avg.toFixed(2)) });
+  // const avg = samples.reduce((a,b) => a + parseFloat(b), 0) / samples.length;
+  // this.setData({ baselineValue: parseFloat(avg.toFixed(2)) });
+  const baseDelta = this.data.DeltaPower;
+  this.setData({ baselineValue: baseDelta });
   return this.data.baselineValue;
 },
   
 
 startTreatmentPhase: function() {
   this.setData({
+    showMathProblem: true,
     currentPhase: '治疗阶段',
     remainingTime: 180, // 延长到3分钟
     gameStarted: true,
@@ -166,16 +204,18 @@ startTreatmentPhase: function() {
     sceneTimer: 0,
     sceneChanged: false
   });
-
+ // 启动数学题定时器
+ this.startMathProblemTimer();
   // 游戏倒计时
-  const gameTimer = setInterval(() => {
+  this.data.gameTimer = setInterval(() => {
     if(this.data.remainingTime <= 0){
-      clearInterval(gameTimer);
+      clearInterval(this.data.gameTimer);
       this.setData({ gameOver: true });
       return;
     }
     this.setData({ remainingTime: this.data.remainingTime - 1 });
   }, 1000);
+  
   // 游戏循环
   this.data.timer = setInterval(this.updateGameState.bind(this), 50);
 },
@@ -186,6 +226,10 @@ startTreatmentPhase: function() {
     // 重置图表
     this.resetChart();
     this.setData({
+      baselineValue: null,
+      baselineSamples: [],
+      currentAttention: null,
+      currentPhase:'',
       gameOver: false,
       experimentStarted: false,
       birdY: 50,
@@ -268,6 +312,30 @@ checkSceneChange: function(newBirdY, attentionDiff) {
   }
 },
 
+// 添加新的方法：开始数学题定时器
+startMathProblemTimer: function() {
+  // 先立即生成一道题
+  this.generateMathProblem();
+  
+  // 然后每3秒切换一次
+  this.data.mathTimer = setInterval(() => {
+    this.generateMathProblem();
+  }, 3000);
+},
+
+// 添加新的方法：生成随机数学题
+generateMathProblem: function() {
+  // 生成两个10-99的随机数
+  const num1 = Math.floor(Math.random() * 90) + 10;
+  const num2 = Math.floor(Math.random() * 90) + 10;
+  const answer = num1 + num2;
+  
+  this.setData({
+    mathProblem: `${num1} + ${num2} = ?`,
+    mathAnswer: answer
+  });
+},
+
   getUserId() {
     return new Promise((resolve, reject) => {
       const user_id = wx.getStorageSync('user_id');
@@ -308,12 +376,14 @@ checkSceneChange: function(newBirdY, attentionDiff) {
     this.getUserId().then((user_id) => {
       const dataToSend = receivedData.slice(0, batch_len);
       receivedData = receivedData.slice(batch_len);
+      // console.log(this.data.currentPhase);
       wx.request({
         url: 'http://4nbsf9900182.vicp.fun:18595/process', 
         method: 'POST',
         data: {
           points: dataToSend,
-          userId: user_id
+          userId: user_id,
+          Step: this.data.currentPhase
         },
         success: (res) => {
           // 检查返回数据是否有效
@@ -332,13 +402,14 @@ checkSceneChange: function(newBirdY, attentionDiff) {
           // const DeltaPowerCurrent = res.data.DeltaCumAvg*100000;
           // const averageTBR = validTBRs.reduce((sum, tbr) => sum + tbr, 0) / validTBRs.length;
 
-          const DeltaPowerCurrent = res.data.DeltaCumAvg*100000;
+          const DeltaPowerCurrent = res.data.DeltaCumAvg;
           const averageTBR = validTBRs.reduce((sum, tbr) => sum + tbr, 0) / validTBRs.length;
           
           this.setData({
             DeltaPower: DeltaPowerCurrent.toFixed(2),
             powerRatio: averageTBR.toFixed(2),
-            currentAttention: (averageTBR * 10).toFixed(2)
+            currentAttention:DeltaPowerCurrent.toFixed(2)
+            // currentAttention: (averageTBR * 10).toFixed(2)
           });
           
           // 处理图表数据
@@ -355,7 +426,8 @@ checkSceneChange: function(newBirdY, attentionDiff) {
           this.setData({
             DeltaPower: DeltaPowerCurrent.toFixed(2),
             powerRatio: averageTBR.toFixed(2),
-            currentAttention: (averageTBR * 10).toFixed(2)
+            // currentAttention: (averageTBR * 10).toFixed(2)
+            currentAttention: DeltaPowerCurrent.toFixed(2)
           });
 
           // 如果在基准阶段，收集所有样本
@@ -391,6 +463,12 @@ checkSceneChange: function(newBirdY, attentionDiff) {
   
   navigateToScan() {
     wx.navigateTo({ url: '/pages/scan/scan' });
+  },
+  
+  navigateToHistory: function() {
+    wx.navigateTo({
+      url: '/pages/history/history'
+    });
   },
   
   enableBLEData: function (data) {
@@ -535,12 +613,12 @@ checkSceneChange: function(newBirdY, attentionDiff) {
       categories: [],
       animation: false,
       series: [
-        {
-          name: 'TBR',
-          data: [],
-          color: '#1aad19',
-          labelColor: '#ffffff'  // 数据标签颜色
-        },
+        // {
+        //   name: 'TBR',
+        //   data: [],
+        //   color: '#1aad19',
+        //   labelColor: '#ffffff'  // 数据标签颜色
+        // },
         {
           name: 'DeltaPower',
           data: [],
@@ -557,7 +635,7 @@ checkSceneChange: function(newBirdY, attentionDiff) {
         title: '数值',
         format: val => val.toFixed(2),
         min: 0,
-        max: 100,
+        max: 20,
         gridColor: '#D8D8D8',
         fontColor: '#ffffff',  // Y轴文字颜色
         titleFontColor: '#ffffff'  // Y轴标题颜色
@@ -619,7 +697,7 @@ refreshChart: function() {
   lineChart.updateData({
     categories: this.data.chartData.timePoints,
     series: [
-      { name: 'TBR', data: this.data.chartData.tbrData },
+      // { name: 'TBR', data: this.data.chartData.tbrData },
       { name: 'DeltaPower', data: this.data.chartData.deltaData }
     ]
   });

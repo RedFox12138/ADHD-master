@@ -47,12 +47,12 @@ def eog_removal(eeg, fs=250, visualize=False):
 
     #去眼电的TH为2 ，TL为0.5
     Th = 3 * sigma
-    Tl = 1* sigma
+    Tl = 1 * sigma
 
     # 寻找超过高阈值的区域,这个是去眼电的时候用的
-    thresholded = envelope > Th
+    # thresholded = envelope > Th
 
-    # thresholded = diff_eeg > 2
+    thresholded = diff_eeg > 2.5
 
     starts, ends = find_intervals(thresholded)
 

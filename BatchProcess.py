@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+from EogRemovalNew import optimized_dwt_eog_removal
 from PreProcess import preprocess3
 from SingleDenoise import eog_removal
 
