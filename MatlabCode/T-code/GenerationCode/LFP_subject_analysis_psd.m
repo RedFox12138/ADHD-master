@@ -4,7 +4,7 @@ close all;
 clear all;
 %% load data
 
-data = importdata('D:\Pycharm_Projects\ADHD-master\data\额头信号去眼电\1\0509 HG范式二 1_processed.txt');
+data = importdata('D:\Pycharm_Projects\ADHD-master\data\额头信号去眼电\0522 SF小程序2_processed.txt');
 % data = importdata('D:\pycharm Project\ADHD-master\data\oksQL7aHWZ0qkXkFP-oC05eZugE8\0424\0424 SF头部2.txt');
 % data = load('E:\brainData\小鼠脑电信号处理\LFP\2024-06-13\2024-06-13-10-28.txt')
 % load('E:\brainData\小鼠脑电信号处理\LFP\20240604俊俊脑电\EEG-1 大鼠\EEG-1 大鼠\15605188179_0516-11_32_03_0516-11_47_08_0.00_4\eeg.mat');
@@ -220,7 +220,7 @@ grid on;
 %%
 % 参数设置
 fs = 250;               % 采样率(Hz)
-window_length = 8;      % 窗长(秒)
+window_length = 6;      % 窗长(秒)
 step_size = 0.5;        % 滑动间隔(秒)
 theta_band = [4, 8];    % Theta频带(4-8Hz)
 beta_band = [13, 30];   % Beta频带(13-30Hz)
@@ -237,7 +237,7 @@ step_samples = round(step_size * fs);
 % 初始化结果存储
 results = struct();
 phases = {'non_attention', 'attention'};
-time_ranges = {[0, 20], [20, 200]};
+time_ranges = {[1, 30], [30, 180]};
 
 % 对每个阶段进行处理
 for i = 1:2
@@ -289,7 +289,7 @@ patch([80 140 140 80], [yl(1) yl(1) yl(2) yl(2)], 'r',...
 % 图形标注
 xlabel('时间 (s)', 'FontSize', 12);
 ylabel('Theta/Beta功率比', 'FontSize', 12);
-title('TBR分析 (窗长8s,步长0.5s)', 'FontSize', 14);
+title('TBR分析 (窗长6s,步长0.5s)', 'FontSize', 14);
 legend('Location', 'best');
 grid on;
 box on;

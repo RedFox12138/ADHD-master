@@ -67,17 +67,24 @@
 }
 
 /* ========== 小鸟元素改造 ========== */
-.bird {
+/* 小鸟容器 */
+.bird-container {
   position: absolute;
   left: 50%;
-  width: 80rpx;
-  height: 60rpx;
   transform: translateX(-50%);
+  width: 120px;  /* 从60px放大到120px */
+  height: 120px; /* 同步调整高度 */
   z-index: 10;
-  transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: top 0.3s ease;
 }
 
-.bird-body {
+/* 小鸟图片 */
+.bird-image {
+  width: 100%;
+  height: auto;
+}
+
+/* .bird-body {
   position: absolute;
   width: 60rpx;
   height: 40rpx;
@@ -106,7 +113,7 @@
   height: 6rpx;
   background: #FFD600;
   clip-path: polygon(0 50%, 100% 0, 100% 100%);
-}
+} */
 
 @keyframes wing-flap {
   from { transform: rotate(20deg); }

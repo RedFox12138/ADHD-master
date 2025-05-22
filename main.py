@@ -22,38 +22,42 @@ SECRET = '907a464400ff1dcf21c297019e543582'
 fs = 250
 user_sessions = {}
 session_lock = threading.Lock()
-# 用于存储处理后的数据以供绘图
 processed_raw_buffer = collections.deque(maxlen=1500)
 processed_processed_buffer = collections.deque(maxlen=1500)
 
 
 def get_user_session(user_id):
     current_time = datetime.datetime.now()
-    user_dir = os.path.join('data', user_id,'data')
-    result_dir = os.path.join('data', user_id,'result')
+    date_str = current_time.strftime("%Y%m%d")  # 按日期组织数据
 
+    # 创建按日期组织的目录结构
+    user_dir = os.path.join('data', user_id, 'data', date_str)
+    result_dir = os.path.join('data', user_id, 'result', date_str)
 
-    with (session_lock):
+    with session_lock:
         os.makedirs(user_dir, exist_ok=True)
         os.makedirs(result_dir, exist_ok=True)
+
         if user_id not in user_sessions or \
                 (current_time - user_sessions[user_id]['last_time']).total_seconds() > 10:
-            timestamp = current_time.strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            timestamp = current_time.strftime("%H%M%S_%f")[:-3]
             user_sessions[user_id] = {
                 'last_time': current_time,
+                'date': date_str,
                 'raw_file': os.path.join(user_dir, f"raw_{timestamp}.txt"),
-                'Delta_result':os.path.join(result_dir, f"{timestamp}.txt"),
+                'Delta_result': os.path.join(result_dir, f"{timestamp}.txt"),
                 'processed_file': os.path.join(user_dir, f"processed_{timestamp}.txt"),
                 'processing_buffer': [],
                 'delta_cumavg_history': [],
-                'tbr_base_list':[],
-                'Base_value':None,
-                'Base_flag':False
+                'tbr_base_list': [],
+                'Base_value': None,
+                'Base_flag': False
             }
         else:
             user_sessions[user_id]['last_time'] = current_time
 
-        return user_sessions[user_id]['raw_file'],user_sessions[user_id]['processed_file'],user_sessions[user_id]['Delta_result']
+        return user_sessions[user_id]['raw_file'], user_sessions[user_id]['processed_file'], user_sessions[user_id][
+            'Delta_result']
 
 
 def calculate_delta_cumavg(eeg_data, Step,fs=250, session=None):
@@ -96,74 +100,77 @@ def process_data():
 
     raw_file, processed_file,delta_file= get_user_session(user_id)
 
-    with session_lock:
-        session = user_sessions[user_id]
-        session['processing_buffer'].extend(points)
-
     if Step == '基准阶段' or Step == '治疗阶段':
-        # 写入原始数据
+
+        with session_lock:
+            session = user_sessions[user_id]
+            session['processing_buffer'].extend(points)
+
         with open(raw_file, 'a') as f:
             for p in points:
                 f.write(f"{p}\n")
+            f.flush()
 
-    delta_cumavg = None
+        delta_cumavg = None
 
-    with session_lock:
-        session = user_sessions[user_id]
-        processing_buffer = session['processing_buffer']
-
-    Delta_power_list = []
-
-
-    while len(processing_buffer) >= 1500:  # 6秒窗口（1500点）
-        raw_window = processing_buffer[:1500]
-        processed_points, tbr = preprocess3(raw_window, fs)
-        # Denoised_points = eog_removal(processed_points,250)
-
-        # print(session['Base_flag'])
-        if Step == '基准阶段' :
-            tbr_list.append(tbr)
-            session['tbr_base_list'].append(tbr)
-
-            # delta_cumavg = calculate_delta_cumavg(processed_points, Step,fs, session)*100
-            # session['Base_value'] = delta_cumavg
-
-            delta_cumavg = np.mean(session['tbr_base_list'][-10:])
-            session['Base_value'] = delta_cumavg
-
-        elif(Step == '治疗阶段') :
-            #治疗阶段刚开始的时候，把上一次基准阶段的最终值记录下来
-            if session['Base_flag'] == False:
-                with open(delta_file, 'a') as f:
-                    f.write(f"{session['Base_value']}\n")
-                session['Base_flag'] = True
-
-            tbr_list.append(tbr)
-
-            # delta_cumavg = calculate_delta_cumavg(processed_points, Step, fs, session)*100
-            # Delta_power_list.append(delta_cumavg)
-
-            Delta_power_list.append(tbr)
-
-        # 更新绘图缓冲区
-        processed_raw_buffer.extend(raw_window)
-        processed_processed_buffer.extend(processed_points)
-
-        # 移动窗口（0.5秒步长=125点）
         with session_lock:
-            session['processing_buffer'] = processing_buffer[125:]
+            session = user_sessions[user_id]
             processing_buffer = session['processing_buffer']
 
-    if Delta_power_list != []:
-        delta_cumavg = np.mean(Delta_power_list)
-        with open(delta_file, 'a') as f:
-            f.write(f"{delta_cumavg}\n")
+        Delta_power_list = []
 
-    return jsonify({
-        "status": "success",
-        "TBR": tbr_list,
-        "DeltaCumAvg": delta_cumavg  # 返回真正的累积平均值
-    })
+
+        while len(processing_buffer) >= 1500:  # 6秒窗口（1500点）
+            raw_window = processing_buffer[:1500]
+            processed_points, tbr = preprocess3(raw_window, fs)
+            # Denoised_points = eog_removal(processed_points,250)
+
+            # print(session['Base_flag'])
+            if Step == '基准阶段' :
+                tbr_list.append(tbr)
+                session['tbr_base_list'].append(tbr)
+
+                # delta_cumavg = calculate_delta_cumavg(processed_points, Step,fs, session)*100
+                # session['Base_value'] = delta_cumavg
+
+                delta_cumavg = np.mean(session['tbr_base_list'][-40:])
+                session['Base_value'] = delta_cumavg
+
+            elif(Step == '治疗阶段') :
+                #治疗阶段刚开始的时候，把上一次基准阶段的最终值记录下来
+                if session['Base_flag'] == False:
+                    with open(delta_file, 'a') as f:
+                        f.write(f"{session['Base_value']}\n")
+                    f.flush()
+                    session['Base_flag'] = True
+
+                tbr_list.append(tbr)
+
+                # delta_cumavg = calculate_delta_cumavg(processed_points, Step, fs, session)*100
+                # Delta_power_list.append(delta_cumavg)
+
+                Delta_power_list.append(tbr)
+
+            # 更新绘图缓冲区
+            processed_raw_buffer.extend(raw_window)
+            processed_processed_buffer.extend(processed_points)
+
+            # 移动窗口（0.5秒步长=125点）
+            with session_lock:
+                session['processing_buffer'] = processing_buffer[125:]
+                processing_buffer = session['processing_buffer']
+
+        if Delta_power_list != []:
+            delta_cumavg = np.mean(Delta_power_list)
+            with open(delta_file, 'a') as f:
+                f.write(f"{delta_cumavg}\n")
+            f.flush()
+
+        return jsonify({
+            "status": "success",
+            "TBR": tbr_list,
+            "DeltaCumAvg": delta_cumavg  # 返回真正的累积平均值
+        })
 
 
 @app.route('/getOpenId', methods=['POST'])
@@ -200,12 +207,12 @@ def update_plot(frame):
     return raw_line, processed_line
 
 
-@app.route('/getHistoryFiles', methods=['POST'])
-def get_history_files():
+@app.route('/getHistoryDates', methods=['POST'])
+def get_history_dates():
     """
-    获取用户的历史文件列表
+    获取用户有历史记录的日期列表
     请求参数: { "userId": "用户openid" }
-    返回: { "success": bool, "files": [文件名列表], "error": "错误信息" }
+    返回: { "success": bool, "dates": [日期列表], "error": "错误信息" }
     """
     try:
         data = request.json
@@ -214,18 +221,73 @@ def get_history_files():
         if not user_id:
             return jsonify({"success": False, "error": "userId is required"}), 400
 
-        # 用户数据目录路径
-        user_dir = os.path.join('data', user_id, 'result')
+        # 用户结果目录路径
+        result_dir = os.path.join('data', user_id, 'result')
 
         # 确保目录存在
-        if not os.path.exists(user_dir):
+        if not os.path.exists(result_dir):
+            return jsonify({"success": True, "dates": []})
+
+        # 获取所有日期目录
+        dates = []
+        for date_dir in os.listdir(result_dir):
+            if os.path.isdir(os.path.join(result_dir, date_dir)):
+                try:
+                    # 验证是否为有效日期格式 (YYYYMMDD)
+                    datetime.datetime.strptime(date_dir, "%Y%m%d")
+                    dates.append(date_dir)
+                except ValueError:
+                    continue
+
+        # 按日期降序排序
+        dates.sort(reverse=True)
+
+        return jsonify({
+            "success": True,
+            "dates": dates
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/getHistoryFiles', methods=['POST'])
+def get_history_files():
+    """
+    获取用户特定日期的历史文件列表
+    请求参数: { "userId": "用户openid", "date": "YYYYMMDD" }
+    返回: { "success": bool, "files": [文件名列表], "error": "错误信息" }
+    """
+    try:
+        data = request.json
+        user_id = data.get('userId')
+        date = data.get('date')
+
+        if not user_id:
+            return jsonify({"success": False, "error": "userId is required"}), 400
+        if not date:
+            return jsonify({"success": False, "error": "date is required"}), 400
+
+        # 验证日期格式
+        try:
+            datetime.datetime.strptime(date, "%Y%m%d")
+        except ValueError:
+            return jsonify({"success": False, "error": "Invalid date format (should be YYYYMMDD)"}), 400
+
+        # 用户结果目录路径
+        result_dir = os.path.join('data', user_id, 'result', date)
+
+        # 确保目录存在
+        if not os.path.exists(result_dir):
             return jsonify({"success": True, "files": []})
 
         # 获取所有.txt文件并按修改时间排序(最新在前)
         files = []
-        for f in os.listdir(user_dir):
+        for f in os.listdir(result_dir):
             if f.endswith('.txt'):
-                file_path = os.path.join(user_dir, f)
+                file_path = os.path.join(result_dir, f)
                 files.append({
                     "name": f,
                     "path": file_path,
@@ -246,26 +308,23 @@ def get_history_files():
             "error": str(e)
         }), 500
 
-
 @app.route('/getHistoryFile', methods=['POST'])
 def get_history_file():
     """
     获取特定历史文件内容
-    请求参数: { "userId": "用户openid", "fileName": "文件名" }
-    返回: {
-        "success": bool,
-        "data": [数值数组],
-        "error": "错误信息"
-
-    }
+    请求参数: { "userId": "用户openid", "date": "YYYYMMDD", "fileName": "文件名" }
+    返回: { "success": bool, "data": [数值数组], "error": "错误信息" }
     """
     try:
         data = request.json
         user_id = data.get('userId')
+        date = data.get('date')
         file_name = data.get('fileName')
 
         if not user_id:
             return jsonify({"success": False, "error": "userId is required"}), 400
+        if not date:
+            return jsonify({"success": False, "error": "date is required"}), 400
         if not file_name:
             return jsonify({"success": False, "error": "fileName is required"}), 400
 
@@ -274,7 +333,7 @@ def get_history_file():
             return jsonify({"success": False, "error": "Invalid file name"}), 400
 
         # 文件路径
-        file_path = os.path.join('data', user_id, 'result', file_name)
+        file_path = os.path.join('data', user_id, 'result', date, file_name)
 
         # 检查文件是否存在
         if not os.path.exists(file_path):
@@ -285,13 +344,11 @@ def get_history_file():
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if line:  # 跳过空行
+                if line:
                     try:
-                        # 尝试解析为浮点数
                         value = float(line)
                         data_points.append(value)
                     except ValueError:
-                        # 如果解析失败，记录但跳过
                         print(f"Warning: 无法解析行内容: {line}")
                         continue
 
@@ -300,7 +357,7 @@ def get_history_file():
 
         return jsonify({
             "success": True,
-            "data": data_points  # 直接返回数值数组
+            "data": data_points
         })
 
     except Exception as e:

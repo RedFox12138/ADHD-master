@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pywt
-from scipy.signal import firwin, lfilter, medfilt
-from scipy.ndimage import uniform_filter1d
+from scipy.signal import firwin, lfilter
 
 
 def eog_removal(eeg, fs=250, visualize=False):

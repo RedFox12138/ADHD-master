@@ -16,38 +16,34 @@
     <view>Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
     <view>Delta 累计功率：{{DeltaPower !== null ? DeltaPower : '未计算'}}</view>
   </view>
+
+  <view class="game-container" wx:if="{{experimentStarted && (currentPhase === '治疗阶段' || currentPhase === '基准阶段')}}">
+  <!-- 当前场景背景 -->
+  <image 
+    src="{{scenes[currentScene].image}}" 
+    class="scene-background" 
+    style="opacity: {{1 - sceneTransitionProgress}}"
+    mode="aspectFill"
+  />
   
-  <!-- 实验信息 -->
-  <view class="experiment-info" wx:if="{{experimentStarted}}">
-    <view wx:if="{{currentPhase === '准备阶段'}}">
-      <text>准备中：{{remainingTime}}秒后开始基准测试</text>
-    </view>
-    <view>实验阶段：{{currentPhase}}</view>
-    <view>剩余时间：{{remainingTime}}秒</view>
-    <view>基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
-    <view>当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
-  </view>
-  
-  <!-- 游戏区域（仅在治疗阶段显示） -->
-  <view class="game-container" wx:if="{{experimentStarted && currentPhase === '治疗阶段'}}">
-    <!-- 场景背景 -->
-    <image 
-      src="{{scenes[currentScene].image}}" 
-      class="scene-background {{sceneChanged ? 'scene-transition' : ''}}"
-      mode="aspectFill"
-    />
+  <!-- 下一个场景背景（过渡用） -->
+  <image 
+    src="{{scenes[nextScene] ? scenes[nextScene].image : ''}}" 
+    class="scene-background" 
+    style="opacity: {{sceneTransitionProgress}}"
+    mode="aspectFill"
+    wx:if="{{nextScene}}"
+  />
     
     
-    <view class="bird" style="top: {{birdY}}%">
-  <!-- 小鸟身体部分 -->
-  <view class="bird-body"></view>
-  <view class="bird-wing"></view>
-  <view class="bird-beak"></view>
-  
-  <!-- 数学题显示在小鸟上方 -->
-  <view class="math-bubble" wx:if="{{showMathProblem && !gameOver}}">
-    <view class="math-problem">{{mathProblem}}</view>
-  </view>
+  <view class="bird-container" style="top: {{birdY}}%">
+
+  <!-- 小鸟图片 -->
+  <image 
+    src="/images/bird.gif" 
+    class="bird-image"
+    mode="widthFix"
+  />
 </view>
     
     <!-- 游戏状态 -->
@@ -56,10 +52,10 @@
         <view class="icon-time"></view>
         <text>{{remainingTime}}s</text>
       </view>
-      <view class="stat-item">
+      <!-- <view class="stat-item">
         <view class="icon-attention"></view>
         <text>{{currentAttention}}%</text>
-      </view>
+      </view> -->
       <view class="stat-item">
         <view class="icon-scene"></view>
         <text>Lv.{{scenes[currentScene].level}}</text>
@@ -73,6 +69,19 @@
       <button class="restart-btn" bindtap="restartExperiment">重新开始</button>
     </view>
   </view>
+  
+  
+  <!-- 实验信息 -->
+  <view class="experiment-info" wx:if="{{experimentStarted}}">
+    <view wx:if="{{currentPhase === '准备阶段'}}">
+      <text>准备中：{{remainingTime}}秒后开始基准测试</text>
+    </view>
+    <view>实验阶段：{{currentPhase}}</view>
+    <view>剩余时间：{{remainingTime}}秒</view>
+    <view>基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
+    <view>当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
+  </view>
+  
   
   <!-- 控制按钮区域 -->
   <view class="control-area">

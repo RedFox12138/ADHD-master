@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fft import fft, ifft
-from pyemd import CEEMDAN
+from PyEMD import CEEMDAN
 
 from Entropy import SampleEntropy2, sample_entropy
 from PlotFreq import PlotFreq

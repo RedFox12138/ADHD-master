@@ -97,10 +97,14 @@ def preprocess(raw_signal, fs=250, visualize=False):
 import numpy as np
 from scipy.signal import cheby2, cheb2ord, filtfilt
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import welch, cheby2, cheb2ord, filtfilt
 
-def compute_power_ratio(eeg_data, Fs, theta_band, beta_band):
+
+def compute_power_ratio(eeg_data, Fs, theta_band, beta_band, show_plots=False):
     """
-    Compute the theta/beta power ratio of EEG data using Chebyshev Type II filters
+    Compute the theta/beta power ratio of EEG data with optional visualization
 
     Parameters:
         eeg_data : array_like
@@ -111,6 +115,8 @@ def compute_power_ratio(eeg_data, Fs, theta_band, beta_band):
             Theta frequency band [low, high] in Hz
         beta_band : list
             Beta frequency band [low, high] in Hz
+        show_plots : bool
+            Whether to display visualization plots (default: False)
 
     Returns:
         float: Theta/beta power ratio
@@ -137,21 +143,61 @@ def compute_power_ratio(eeg_data, Fs, theta_band, beta_band):
 
     # Filter theta band (using filtfilt for zero-phase filtering)
     theta_filtered = filtfilt(b_theta, a_theta, eeg_data)
-    # Calculate theta power (sum of squares)
     theta_power = np.sum(theta_filtered ** 2)
 
     # Filter beta band (using filtfilt for zero-phase filtering)
     beta_filtered = filtfilt(b_beta, a_beta, eeg_data)
-    # Calculate beta power (sum of squares)
     beta_power = np.sum(beta_filtered ** 2)
 
     # Compute theta/beta power ratio
-    if beta_power != 0:
-        power_ratio = theta_power / beta_power
-    else:
-        power_ratio = np.nan  # Prevent division by zero
+    power_ratio = theta_power / beta_power if beta_power != 0 else np.nan
+
+    # Visualization (only if requested)
+    if show_plots:
+        plt.figure(figsize=(15, 10))
+
+        # Time domain plots
+        t = np.arange(len(eeg_data)) / Fs
+        plt.subplot(3, 1, 1)
+        plt.plot(t, eeg_data, label='Original')
+        plt.plot(t, theta_filtered, label='Theta filtered')
+        plt.plot(t, beta_filtered, label='Beta filtered')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
+        plt.title('Original and Filtered Signals')
+        plt.legend()
+        plt.grid(True)
+
+        # Frequency domain plots
+        freqs, psd = welch(eeg_data, fs=Fs, nperseg=1024)
+        _, theta_psd = welch(theta_filtered, fs=Fs, nperseg=1024)
+        _, beta_psd = welch(beta_filtered, fs=Fs, nperseg=1024)
+
+        plt.subplot(3, 1, 2)
+        plt.semilogy(freqs, psd, label='Original')
+        plt.semilogy(freqs, theta_psd, label='Theta band')
+        plt.semilogy(freqs, beta_psd, label='Beta band')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Power Spectral Density')
+        plt.title('Power Spectral Density')
+        plt.legend()
+        plt.grid(True)
+
+        # Band power comparison
+        plt.subplot(3, 1, 3)
+        bands = ['Theta', 'Beta']
+        powers = [theta_power, beta_power]
+        plt.bar(bands, powers)
+        plt.ylabel('Power')
+        plt.title(f'Band Power Comparison (TBR = {power_ratio:.2f})')
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
 
     return power_ratio
+
+
 def compute_power_ratio2(eeg_data, Fs, theta_band, beta_band,alpha_band):
     """
     计算 theta 波段和 beta 波段的功率比，并绘制频谱对比图

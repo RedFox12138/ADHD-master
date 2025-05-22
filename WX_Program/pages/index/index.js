@@ -154,7 +154,7 @@ Page({
           // 准备阶段结束，自动进入基准阶段
           that.setData({
             currentPhase: '基准阶段',
-            remainingTime: 20
+            remainingTime: 30
           });
           that.startPhaseTimer(); // 继续计时
         } 
@@ -241,33 +241,36 @@ startTreatmentPhase: function() {
     }, 500);
   },
   
-updateGameState: function() {
-  if (!this.data.gameStarted || this.data.gameOver || this.data.sceneCooldown) return;
-  
-  // 计算注意力差值
-  const attentionDiff = this.data.currentAttention - this.data.baselineValue;
-  
-  // 更新小鸟位置（带速度限制）
-  let newBirdY = this.data.birdY;
-  const speed = 0.15; // 降低速度防止过冲
-  
-  if (attentionDiff > 0) {
-    newBirdY = Math.max(5, newBirdY - speed);
-  } else {
-    newBirdY = Math.min(95, newBirdY + speed);
-  }
-  
-  // 强制边界锁定
-  if (newBirdY <= 5) newBirdY = 5;
-  if (newBirdY >= 95) newBirdY = 95;
-  
-  this.setData({ birdY: newBirdY });
-  
-  // 场景检查（带冷却检测）
-  if (newBirdY === 5 || newBirdY === 95) {
-    this.checkSceneChange(newBirdY, attentionDiff);
-  }
-},
+  updateGameState: function() {
+    if (!this.data.gameStarted || this.data.gameOver || this.data.sceneCooldown) return;
+    
+    // 基准阶段不移动小鸟
+    if (this.data.currentPhase === '基准阶段') return;
+    
+    // 计算注意力差值
+    const attentionDiff = this.data.currentAttention - this.data.baselineValue;
+    
+    // 更新小鸟位置（带速度限制）
+    let newBirdY = this.data.birdY;
+    const speed = 0.15; // 降低速度防止过冲
+    
+    if (attentionDiff > 0) {
+      newBirdY = Math.max(5, newBirdY - speed);
+    } else {
+      newBirdY = Math.min(95, newBirdY + speed);
+    }
+    
+    // 强制边界锁定
+    if (newBirdY <= 5) newBirdY = 5;
+    if (newBirdY >= 95) newBirdY = 95;
+    
+    this.setData({ birdY: newBirdY });
+    
+    // 场景检查（带冷却检测）
+    if (newBirdY === 5 || newBirdY === 95) {
+      this.checkSceneChange(newBirdY, attentionDiff);
+    }
+  },
 
 checkSceneChange: function(newBirdY, attentionDiff) {
   if (this.data.sceneCooldown) return;

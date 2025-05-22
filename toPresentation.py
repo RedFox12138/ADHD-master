@@ -1,7 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.signal import welch
-from PreProcess import preprocess
+from PreProcess import preprocess, preprocess3
+
 """
    该代码用于展示凝胶和干电极数据的对比，一般没什么用
 """
@@ -22,24 +23,24 @@ def plot_freq_psd(data, fs=300, label=None, ax=None, color=None):
 
 
 # 加载数据
-fs = 300
-data1 = np.loadtxt('./0402/额头干电极.txt', dtype=np.float32)
-data2 = np.loadtxt('./0402/额头凝胶1.txt', dtype=np.float32)
-data3 = np.loadtxt('./0402/额头凝胶2.txt', dtype=np.float32)
-data4 = np.loadtxt('./0402/额头凝胶3.txt', dtype=np.float32)
+fs = 250
+data1 = np.loadtxt('./data/oksQL7aHWZ0qkXkFP-oC05eZugE8/data/0519 SF头部干电极.txt', dtype=np.float32)
+data2 = np.loadtxt('./data/oksQL7aHWZ0qkXkFP-oC05eZugE8/data/0519 SF头部凝胶.txt', dtype=np.float32)
+data3 = np.loadtxt('./data/oksQL7aHWZ0qkXkFP-oC05eZugE8/data/0519 XY额头干电极.txt', dtype=np.float32)
+data4 = np.loadtxt('./data/oksQL7aHWZ0qkXkFP-oC05eZugE8/data/0519 XY额头凝胶.txt', dtype=np.float32)
 
 # 统一长度
-lenmin = min(len(data1), len(data2), len(data3), len(data4)) - 17 * fs
+lenmin = min(len(data1), len(data2), len(data3), len(data4))
 data1 = data1[:lenmin]
 data2 = data2[:lenmin]
 data3 = data3[:lenmin]
 data4 = data4[:lenmin]
 
 # 预处理
-processed_points1 = preprocess(data1, fs)
-processed_points2 = preprocess(data2, fs)
-processed_points3 = preprocess(data3, fs)
-processed_points4 = preprocess(data4, fs)
+processed_points1,_ = preprocess3(data1, fs)
+processed_points2,_ = preprocess3(data2, fs)
+processed_points3,_ = preprocess3(data3, fs)
+processed_points4,_ = preprocess3(data4, fs)
 
 # 创建时域和频域对比图
 plt.figure(figsize=(14, 10))
@@ -47,19 +48,21 @@ plt.figure(figsize=(14, 10))
 # ===== 时域图 =====
 plt.subplot(2, 1, 1)
 offset = 50  # 信号间的垂直偏移量
+
+time1 = np.arange(lenmin) / fs
 time = np.arange(len(processed_points2)) / fs
 
 # 绘制原始信号（半透明）
-plt.plot(time, data1 + offset * 0, label='dry (raw)', color='blue', alpha=0.5)
-plt.plot(time, data2 + offset * 1, label='gel1 (raw)', color='green', alpha=0.5)
-plt.plot(time, data3 + offset * 2, label='gel2 (raw)', color='red', alpha=0.5)
-plt.plot(time, data4 + offset * 3, label='gel3 (raw)', color='purple', alpha=0.5)
+plt.plot(time1, data1 + offset * 0, label='Cz dry (raw)', color='blue', alpha=0.5)
+plt.plot(time1, data2 + offset * 1, label='Cz gel (raw)', color='green', alpha=0.5)
+plt.plot(time1, data3 + offset * 2, label='Fp1 dry (raw)', color='red', alpha=0.5)
+plt.plot(time1, data4 + offset * 3, label='Fp1 gel (raw)', color='purple', alpha=0.5)
 
 # 绘制处理后的信号（实线）
-plt.plot(time, processed_points1 + offset * 0, label='dry (processed)', color='blue', linewidth=1.2)
-plt.plot(time, processed_points2 + offset * 1, label='gel1 (processed)', color='green', linewidth=1.2)
-plt.plot(time, processed_points3 + offset * 2, label='gel2 (processed)', color='red', linewidth=1.2)
-plt.plot(time, processed_points4 + offset * 3, label='gel3 (processed)', color='purple', linewidth=1.2)
+plt.plot(time, processed_points1 + offset * 0, label='Cz dry (processed)', color='blue', linewidth=1.2)
+plt.plot(time, processed_points2 + offset * 1, label='Cz gel (processed)', color='green', linewidth=1.2)
+plt.plot(time, processed_points3 + offset * 2, label='Fp1 dry (processed)', color='red', linewidth=1.2)
+plt.plot(time, processed_points4 + offset * 3, label='Fp1 gel (processed)', color='purple', linewidth=1.2)
 
 plt.legend(loc='upper right', ncol=2)
 plt.xlabel('Time (s)')
@@ -71,10 +74,10 @@ plt.grid(True, alpha=0.3)
 plt.subplot(2, 1, 2)
 
 # 绘制处理后的信号PSD
-plot_freq_psd(processed_points1, fs=fs, label='dry', color='blue')
-plot_freq_psd(processed_points2, fs=fs, label='gel1', color='green')
-plot_freq_psd(processed_points3, fs=fs, label='gel2', color='red')
-plot_freq_psd(processed_points4, fs=fs, label='gel3', color='purple')
+plot_freq_psd(processed_points1, fs=fs, label='Cz dry', color='blue')
+plot_freq_psd(processed_points2, fs=fs, label='Cz gel', color='green')
+plot_freq_psd(processed_points3, fs=fs, label='Fp1 dry', color='red')
+plot_freq_psd(processed_points4, fs=fs, label='Fp1 gel', color='purple')
 
 plt.legend(loc='upper right')
 plt.xlim(0, 50)  # 聚焦0-50Hz范围

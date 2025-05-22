@@ -21,7 +21,7 @@ def process_txt_file(txt_path, output_folder, fs=250):
     processed_signal,_ = preprocess3(data, fs)
 
     # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
-    processed_signal = eog_removal(processed_signal,250,True)
+    processed_signal = eog_removal(processed_signal,250,False)
 
     # 生成输出文件名(与txt同名，但扩展名为_processed.txt)
     filename = os.path.basename(txt_path)
