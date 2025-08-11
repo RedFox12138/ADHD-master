@@ -10,10 +10,8 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 import datetime
 import requests
-from scipy import signal
 from scipy.signal import spectrogram
-
-from PreProcess import preprocess3, preprocess1
+from PreProcess import preprocess3,compute_power_ratio
 
 app = Flask(__name__)
 
@@ -100,8 +98,8 @@ def process_data():
 
     raw_file, processed_file,delta_file= get_user_session(user_id)
 
-    if Step == '基准阶段' or Step == '治疗阶段':
-
+    # if Step == '基准阶段' or Step == '治疗阶段':
+    if True:
         with session_lock:
             session = user_sessions[user_id]
             session['processing_buffer'].extend(points)
@@ -122,8 +120,12 @@ def process_data():
 
         while len(processing_buffer) >= 1500:  # 6秒窗口（1500点）
             raw_window = processing_buffer[:1500]
-            processed_points, tbr = preprocess3(raw_window, fs)
-            # Denoised_points = eog_removal(processed_points,250)
+            processed_points, _ = preprocess3(raw_window, fs)
+            theta_band = [4, 8]
+            beta_band = [13, 30]
+            processed_points = eog_removal(processed_points, 250, False)
+            tbr = compute_power_ratio(processed_points, fs, theta_band, beta_band)
+
 
             # print(session['Base_flag'])
             if Step == '基准阶段' :
@@ -141,7 +143,7 @@ def process_data():
                 if session['Base_flag'] == False:
                     with open(delta_file, 'a') as f:
                         f.write(f"{session['Base_value']}\n")
-                    f.flush()
+                        f.flush()
                     session['Base_flag'] = True
 
                 tbr_list.append(tbr)
@@ -164,7 +166,7 @@ def process_data():
             delta_cumavg = np.mean(Delta_power_list)
             with open(delta_file, 'a') as f:
                 f.write(f"{delta_cumavg}\n")
-            f.flush()
+                f.flush()
 
         return jsonify({
             "status": "success",

@@ -42,9 +42,9 @@ import matplotlib.pyplot as plt
 import pywt
 from scipy import signal
 
-#去眼电的系数是 level 6    low 0.6   high 1.5
-def optimized_dwt_eog_removal(eeg_signal, fs=250, wavelet='coif3', level=6,
-                              low_threshold_scale=0.6, high_threshold_scale=1.5,
+#去眼电的系数是 level 6    low 0.6   high 1.5  thresh两个值是1.5 2.5
+def optimized_dwt_eog_removal(eeg_signal, fs=250, wavelet='coif3', level=10,
+                              low_threshold_scale=0.8, high_threshold_scale=1.2,
                               visualize=False):
     """
     使用优化的DWT方法去除眼电伪迹，基于文献研究结果改进
@@ -104,9 +104,9 @@ def optimized_dwt_eog_removal(eeg_signal, fs=250, wavelet='coif3', level=6,
     for i in range(1, len(coeffs)):
         # 计算统计阈值(ST)
         if i >= 3:  # 只对level 3及以上(8-16Hz)的细节系数应用更严格的阈值
-            thresh = 1.5 * np.std(coeffs[i]) * low_threshold_scale
+            thresh = 3 * np.std(coeffs[i]) * low_threshold_scale
         else:  # 对高频部分(16-64Hz)应用更宽松的阈值
-            thresh = 2.5 * np.std(coeffs[i]) * low_threshold_scale
+            thresh = 4 * np.std(coeffs[i]) * low_threshold_scale
 
         # 应用硬阈值(文献表明硬阈值效果更好)
         processed_coeff = pywt.threshold(coeffs[i], thresh, mode='hard')

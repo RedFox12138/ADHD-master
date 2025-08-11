@@ -1,6 +1,9 @@
 import numpy as np
 import os
 
+from matplotlib import pyplot as plt
+from vmdpy import VMD
+
 from EogRemovalNew import optimized_dwt_eog_removal
 from PreProcess import preprocess3
 from SingleDenoise import eog_removal
@@ -20,8 +23,45 @@ def process_txt_file(txt_path, output_folder, fs=250):
     # 对整个信号进行预处理
     processed_signal,_ = preprocess3(data, fs)
 
+    processed_signal = eog_removal(processed_signal, 250, False)
     # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
-    processed_signal = eog_removal(processed_signal,250,False)
+
+
+
+    # alpha = 2000  # moderate bandwidth constraint
+    # tau = 0.  # noise-tolerance (no strict fidelity enforcement)
+    # K = 7  # 3 modes
+    # DC = 0  # no DC part imposed
+    # init = 1  # initialize omegas uniformly
+    # tol = 1e-7
+    #
+    #
+    # u, u_hat, omega = VMD(processed_signal, alpha, tau, K, DC, init, tol)
+    #
+    #
+    # if len(processed_signal) % 2 != 0:
+    #     processed_signal = processed_signal[:-1]  # 丢弃最后一个点
+    #
+    # processed_signal  = processed_signal - u[0,:]
+
+    # # 创建图形
+    # plt.figure(figsize=(12, 8))
+    #
+    # # 绘制原始信号
+    # plt.subplot(K + 1, 1, 1)  # K+1行，1列，第1个子图
+    # plt.plot(processed_signal, 'b', label='Original Signal')
+    # plt.plot(processed_signal2, 'y', label='Process Signal')
+    # plt.title('Original Signal vs VMD Modes')
+    # plt.legend()
+    #
+    # # 绘制每个模态
+    # for i in range(K):
+    #     plt.subplot(K + 1, 1, i + 2)  # K+1行，1列，第i+2个子图
+    #     plt.plot(u[i,:], 'r', label=f'Mode {i + 1}')
+    #     plt.legend()
+    #
+    # plt.tight_layout()  # 自动调整子图间距
+    # plt.show()
 
     # 生成输出文件名(与txt同名，但扩展名为_processed.txt)
     filename = os.path.basename(txt_path)

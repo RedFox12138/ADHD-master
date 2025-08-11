@@ -16,28 +16,28 @@ from scipy.signal import cheby2, filtfilt, welch, medfilt
 plt.switch_backend('TkAgg')
 
 
-# 预处理函数
-def preprocess1(OriginalSignal, fs=250):
-    # out = input.shape[0]
-    # step1: 滤波
-    d1 = OriginalSignal
-    b, a = signal.butter(6, 0.5 / (fs / 2), 'highpass')  # 0.5Hz 高通巴特沃斯滤波器
-    d1 = signal.filtfilt(b, a, d1)
-
-    b, a = signal.butter(6, [49 / (fs / 2), 51 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-    d1 = signal.filtfilt(b, a, d1)
-
-    b, a = signal.butter(6, [99 / (fs / 2), 101 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-    d1 = signal.filtfilt(b, a, d1)
-
-    b, a = signal.butter(6, 40/ (fs / 2), 'lowpass')  # 100Hz 低通
-    d1 = signal.filtfilt(b, a, d1)
-
-    theta_band = [4,8]
-    beta_band = [13,30]
-    power_ratio = compute_power_ratio(d1, fs, theta_band, beta_band)
-
-    return d1,power_ratio
+# # 预处理函数
+# def preprocess1(OriginalSignal, fs=250):
+#     # out = input.shape[0]
+#     # step1: 滤波
+#     d1 = OriginalSignal
+#     b, a = signal.butter(6, 0.5 / (fs / 2), 'highpass')  # 0.5Hz 高通巴特沃斯滤波器
+#     d1 = signal.filtfilt(b, a, d1)
+#
+#     b, a = signal.butter(6, [49 / (fs / 2), 51 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
+#     d1 = signal.filtfilt(b, a, d1)
+#
+#     b, a = signal.butter(6, [99 / (fs / 2), 101 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
+#     d1 = signal.filtfilt(b, a, d1)
+#
+#     b, a = signal.butter(6, 40/ (fs / 2), 'lowpass')  # 100Hz 低通
+#     d1 = signal.filtfilt(b, a, d1)
+#
+#     theta_band = [4,8]
+#     beta_band = [13,30]
+#     power_ratio = compute_power_ratio(d1, fs, theta_band, beta_band)
+#
+#     return d1,power_ratio
 
 
 def preprocess3(x, Fs):
@@ -51,281 +51,8 @@ def preprocess3(x, Fs):
     power_ratio = compute_power_ratio(d1, Fs, theta_band, beta_band)
     return d1,power_ratio
 
-def preprocess(raw_signal, fs=250, visualize=False):
-    """完整的眼电信号预处理流程"""
-    # ===== 1. 智能延拓 =====
-    max_filter_len = 3 * 71  # 取FIR滤波器长度的3倍
-    pad_len = int(1.5 * max_filter_len)
 
-    # 镜像延拓 + 汉宁窗过渡
-    padded = np.pad(raw_signal, (pad_len, pad_len), mode='reflect')
-    window = np.concatenate([
-        np.hanning(2 * pad_len)[:pad_len],
-        np.ones(len(padded) - 2 * pad_len),
-        np.hanning(2 * pad_len)[pad_len:]
-    ])
-    padded = padded * window
-
-    # ===== 2. 滤波器设计 =====
-    # 0.5Hz高通 (Butterworth)
-    sos_high = signal.butter(6, 0.5, 'highpass', fs=fs, output='sos')
-
-
-    # 50Hz带阻 (Notch)
-    def design_notch(f0, Q=30):
-        nyq = fs / 2
-        w0 = f0 / nyq
-        b, a = signal.iirnotch(w0, Q)
-        return b, a
-
-    # 40Hz低通 (FIR)
-    fir_low = signal.firls(71, [0, 38, 42, fs / 2], [1, 1, 0, 0], fs=fs)
-
-    # ===== 3. 零相位滤波链 =====
-    filtered = signal.sosfiltfilt(sos_high, padded)  # 高通
-    for f0 in [50, 100]:  # 消除基波和谐波
-        b, a = design_notch(f0)
-        filtered = signal.filtfilt(b, a, filtered)
-    filtered = signal.filtfilt(fir_low, [1.0], filtered)  # 低通
-
-    # ===== 4. 精准截断 =====
-    result = filtered[pad_len:-pad_len]
-
-    return result
-
-
-import numpy as np
-from scipy.signal import cheby2, cheb2ord, filtfilt
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import welch, cheby2, cheb2ord, filtfilt
-
-
-def compute_power_ratio(eeg_data, Fs, theta_band, beta_band, show_plots=False):
-    """
-    Compute the theta/beta power ratio of EEG data with optional visualization
-
-    Parameters:
-        eeg_data : array_like
-            Input EEG signal (1D array)
-        Fs : float
-            Sampling frequency in Hz
-        theta_band : list
-            Theta frequency band [low, high] in Hz
-        beta_band : list
-            Beta frequency band [low, high] in Hz
-        show_plots : bool
-            Whether to display visualization plots (default: False)
-
-    Returns:
-        float: Theta/beta power ratio
-    """
-    # Chebyshev Type II filter parameters
-    Rp = 3  # Passband ripple (dB)
-    Rs = 40  # Stopband attenuation (dB)
-
-    # Design theta band Chebyshev Type II bandpass filter
-    f1_theta = theta_band[0] / (Fs / 2)
-    f2_theta = theta_band[1] / (Fs / 2)
-    n_theta, Wn_theta = cheb2ord([f1_theta, f2_theta],
-                                 [f1_theta * 0.8, f2_theta * 1.2],
-                                 Rp, Rs)
-    b_theta, a_theta = cheby2(n_theta, Rs, Wn_theta, 'bandpass')
-
-    # Design beta band Chebyshev Type II bandpass filter
-    f1_beta = beta_band[0] / (Fs / 2)
-    f2_beta = beta_band[1] / (Fs / 2)
-    n_beta, Wn_beta = cheb2ord([f1_beta, f2_beta],
-                               [f1_beta * 0.8, f2_beta * 1.2],
-                               Rp, Rs)
-    b_beta, a_beta = cheby2(n_beta, Rs, Wn_beta, 'bandpass')
-
-    # Filter theta band (using filtfilt for zero-phase filtering)
-    theta_filtered = filtfilt(b_theta, a_theta, eeg_data)
-    theta_power = np.sum(theta_filtered ** 2)
-
-    # Filter beta band (using filtfilt for zero-phase filtering)
-    beta_filtered = filtfilt(b_beta, a_beta, eeg_data)
-    beta_power = np.sum(beta_filtered ** 2)
-
-    # Compute theta/beta power ratio
-    power_ratio = theta_power / beta_power if beta_power != 0 else np.nan
-
-    # Visualization (only if requested)
-    if show_plots:
-        plt.figure(figsize=(15, 10))
-
-        # Time domain plots
-        t = np.arange(len(eeg_data)) / Fs
-        plt.subplot(3, 1, 1)
-        plt.plot(t, eeg_data, label='Original')
-        plt.plot(t, theta_filtered, label='Theta filtered')
-        plt.plot(t, beta_filtered, label='Beta filtered')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Amplitude')
-        plt.title('Original and Filtered Signals')
-        plt.legend()
-        plt.grid(True)
-
-        # Frequency domain plots
-        freqs, psd = welch(eeg_data, fs=Fs, nperseg=1024)
-        _, theta_psd = welch(theta_filtered, fs=Fs, nperseg=1024)
-        _, beta_psd = welch(beta_filtered, fs=Fs, nperseg=1024)
-
-        plt.subplot(3, 1, 2)
-        plt.semilogy(freqs, psd, label='Original')
-        plt.semilogy(freqs, theta_psd, label='Theta band')
-        plt.semilogy(freqs, beta_psd, label='Beta band')
-        plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Power Spectral Density')
-        plt.title('Power Spectral Density')
-        plt.legend()
-        plt.grid(True)
-
-        # Band power comparison
-        plt.subplot(3, 1, 3)
-        bands = ['Theta', 'Beta']
-        powers = [theta_power, beta_power]
-        plt.bar(bands, powers)
-        plt.ylabel('Power')
-        plt.title(f'Band Power Comparison (TBR = {power_ratio:.2f})')
-        plt.grid(True)
-
-        plt.tight_layout()
-        plt.show()
-
-    return power_ratio
-
-
-def compute_power_ratio2(eeg_data, Fs, theta_band, beta_band,alpha_band):
-    """
-    计算 theta 波段和 beta 波段的功率比，并绘制频谱对比图
-
-    参数:
-    eeg_data: 输入的 EEG 信号（一维数组）
-    Fs: 采样频率
-    theta_band: theta 波段范围 [f1_theta, f2_theta]
-    beta_band: beta 波段范围 [f1_beta, f2_beta]
-
-    返回:
-    power_ratio: theta 和 beta 波段的功率比
-    """
-
-    # 切比雪夫 II 型滤波器参数
-    Rs = 20  # 阻带衰减（dB）
-
-    # 设计 theta 波段的切比雪夫 II 型带通滤波器
-    f1_theta = theta_band[0] / (Fs / 2)
-    f2_theta = theta_band[1] / (Fs / 2)
-    Wn_theta = [f1_theta, f2_theta]
-    b_theta, a_theta = cheby2(6, Rs, Wn_theta, btype='bandpass')  # 8 是滤波器阶数
-
-    # 设计 beta 波段的切比雪夫 II 型带通滤波器
-    f1_beta = beta_band[0] / (Fs / 2)
-    f2_beta = beta_band[1] / (Fs / 2)
-    Wn_beta = [f1_beta, f2_beta]
-    b_beta, a_beta = cheby2(6, Rs, Wn_beta, btype='bandpass')  # 8 是滤波器阶数
-
-    f1_alpha = alpha_band[0] / (Fs / 2)
-    f2_alpha = alpha_band[1] / (Fs / 2)
-    Wn_alpha = [f1_alpha, f2_alpha]
-    b_alpha, a_alpha = cheby2(6, Rs, Wn_alpha, btype='bandpass')  # 8 是滤波器阶数
-
-
-    # 对 theta 波段滤波
-    theta_filtered = filtfilt(b_theta, a_theta, eeg_data.astype(float))
-    # 对 beta 波段滤波
-    beta_filtered = filtfilt(b_beta, a_beta, eeg_data.astype(float))
-
-    alpha_filtered = filtfilt(b_alpha, a_alpha, eeg_data.astype(float))
-
-    # 计算 theta 和 beta 波段功率
-    theta_power = np.sum(theta_filtered ** 2)
-    beta_power = np.sum(beta_filtered ** 2)
-    alpha_power = np.sum(alpha_filtered ** 2)
-
-    # 计算 theta 和 beta 功率比
-    if beta_power != 0:
-        power_ratio = (theta_power +alpha_power)/ beta_power
-    else:
-        power_ratio = np.nan  # 防止除以零
-
-    return power_ratio
-
-from typing import Tuple, List, Optional
-
-
-def bior68_wavelet_denoise(
-    signal: np.ndarray,
-    fs: int = 250,
-    wavelet: str = 'bior6.8',
-    level: Optional[int] = None,
-    threshold_mode: str = 'adaptive',
-    hard_threshold: bool = False,
-    noise_std: Optional[float] = None
-) -> np.ndarray:
-    """
-    增强版小波去噪（可调节去噪力度）
-
-    参数:
-        signal: 输入信号
-        fs: 采样频率
-        wavelet: 小波类型（默认bior6.8）
-        level: 分解层数（自动计算若为None）
-        threshold_mode: 阈值模式 ('adaptive', 'universal', 'manual')
-        hard_threshold: 是否使用硬阈值（默认软阈值）
-        noise_std: 手动指定噪声标准差（可选）
-
-    返回:
-        去噪后的信号
-    """
-    # 1. 自动计算最佳分解层数（比标准更激进）
-    if level is None:
-        level = min(8, int(np.log2(len(signal))) - 3)
-        level = max(level, 1)  # 至少1层
-
-    # 2. 小波分解
-    coeffs = pywt.wavedec(signal, wavelet, level=level)
-
-    # 3. 噪声估计
-    if noise_std is None:
-        noise_std = np.median(np.abs(coeffs[-1])) / 0.6745
-
-    # 4. 增强阈值策略
-    detail_coeffs = coeffs[1:]
-    for i, detail in enumerate(detail_coeffs):
-        N = len(detail)
-
-        if threshold_mode == 'adaptive':
-            # 层自适应阈值（更激进的系数衰减）
-            threshold = noise_std * np.sqrt(2 * np.log(N)) / np.log2(i + 2)
-        elif threshold_mode == 'universal':
-            threshold = noise_std * np.sqrt(2 * np.log(N))
-        else:  # manual
-            threshold = noise_std * 1.5  # 手动调整系数
-
-        # 应用阈值
-        if hard_threshold:
-            detail_coeffs[i] = pywt.threshold(detail, threshold, mode='hard')
-        else:
-            # 增强型软阈值（更激进）
-            abs_val = np.abs(detail)
-            sign = np.sign(detail)
-            detail_coeffs[i] = sign * np.where(
-                abs_val > threshold,
-                abs_val - threshold * 1.2,  # 增加衰减力度
-                0
-            )
-
-    # 5. 重构信号
-    coeffs[1:] = detail_coeffs
-    return pywt.waverec(coeffs, wavelet)[:len(signal)]
-
-
-import numpy as np
 import math
-
 
 def IIR(data, rate, frequency):
     """
@@ -519,4 +246,322 @@ def LPF(data, rate, frequency):
         output_args[i] = data2[i + delay]
 
     return output_args
+
+# def preprocess(raw_signal, fs=250, visualize=False):
+#     """完整的眼电信号预处理流程"""
+#     # ===== 1. 智能延拓 =====
+#     max_filter_len = 3 * 71  # 取FIR滤波器长度的3倍
+#     pad_len = int(1.5 * max_filter_len)
+#
+#     # 镜像延拓 + 汉宁窗过渡
+#     padded = np.pad(raw_signal, (pad_len, pad_len), mode='reflect')
+#     window = np.concatenate([
+#         np.hanning(2 * pad_len)[:pad_len],
+#         np.ones(len(padded) - 2 * pad_len),
+#         np.hanning(2 * pad_len)[pad_len:]
+#     ])
+#     padded = padded * window
+#
+#     # ===== 2. 滤波器设计 =====
+#     # 0.5Hz高通 (Butterworth)
+#     sos_high = signal.butter(6, 0.5, 'highpass', fs=fs, output='sos')
+#
+#
+#     # 50Hz带阻 (Notch)
+#     def design_notch(f0, Q=30):
+#         nyq = fs / 2
+#         w0 = f0 / nyq
+#         b, a = signal.iirnotch(w0, Q)
+#         return b, a
+#
+#     # 40Hz低通 (FIR)
+#     fir_low = signal.firls(71, [0, 38, 42, fs / 2], [1, 1, 0, 0], fs=fs)
+#
+#     # ===== 3. 零相位滤波链 =====
+#     filtered = signal.sosfiltfilt(sos_high, padded)  # 高通
+#     for f0 in [50, 100]:  # 消除基波和谐波
+#         b, a = design_notch(f0)
+#         filtered = signal.filtfilt(b, a, filtered)
+#     filtered = signal.filtfilt(fir_low, [1.0], filtered)  # 低通
+#
+#     # ===== 4. 精准截断 =====
+#     result = filtered[pad_len:-pad_len]
+#
+#     return result
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import welch, cheby2, cheb2ord, filtfilt
+
+
+def compute_power_ratio(eeg_data, Fs, theta_band, beta_band, show_plots=False):
+
+    # Chebyshev Type II filter parameters
+    Rp = 3  # Passband ripple (dB)
+    Rs = 40  # Stopband attenuation (dB)
+
+    # Design theta band Chebyshev Type II bandpass filter
+    f1_theta = theta_band[0] / (Fs / 2)
+    f2_theta = theta_band[1] / (Fs / 2)
+    n_theta, Wn_theta = cheb2ord([f1_theta, f2_theta],
+                                 [f1_theta * 0.8, f2_theta * 1.2],
+                                 Rp, Rs)
+    b_theta, a_theta = cheby2(n_theta, Rs, Wn_theta, 'bandpass')
+
+    # Design beta band Chebyshev Type II bandpass filter
+    f1_beta = beta_band[0] / (Fs / 2)
+    f2_beta = beta_band[1] / (Fs / 2)
+    n_beta, Wn_beta = cheb2ord([f1_beta, f2_beta],
+                               [f1_beta * 0.8, f2_beta * 1.2],
+                               Rp, Rs)
+    b_beta, a_beta = cheby2(n_beta, Rs, Wn_beta, 'bandpass')
+
+    # Filter theta band (using filtfilt for zero-phase filtering)
+    theta_filtered = filtfilt(b_theta, a_theta, eeg_data)
+    theta_power = np.sum(theta_filtered ** 2)
+
+    # Filter beta band (using filtfilt for zero-phase filtering)
+    beta_filtered = filtfilt(b_beta, a_beta, eeg_data)
+    beta_power = np.sum(beta_filtered ** 2)
+
+    # Compute theta/beta power ratio
+    power_ratio = theta_power / beta_power if beta_power != 0 else np.nan
+
+    # Visualization (only if requested)
+    if show_plots:
+        plt.figure(figsize=(15, 10))
+
+        # Time domain plots
+        t = np.arange(len(eeg_data)) / Fs
+        plt.subplot(3, 1, 1)
+        plt.plot(t, eeg_data, label='Original')
+        plt.plot(t, theta_filtered, label='Theta filtered')
+        plt.plot(t, beta_filtered, label='Beta filtered')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
+        plt.title('Original and Filtered Signals')
+        plt.legend()
+        plt.grid(True)
+
+        # Frequency domain plots
+        freqs, psd = welch(eeg_data, fs=Fs, nperseg=1024)
+        _, theta_psd = welch(theta_filtered, fs=Fs, nperseg=1024)
+        _, beta_psd = welch(beta_filtered, fs=Fs, nperseg=1024)
+
+        plt.subplot(3, 1, 2)
+        plt.semilogy(freqs, psd, label='Original')
+        plt.semilogy(freqs, theta_psd, label='Theta band')
+        plt.semilogy(freqs, beta_psd, label='Beta band')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Power Spectral Density')
+        plt.title('Power Spectral Density')
+        plt.legend()
+        plt.grid(True)
+
+        # Band power comparison
+        plt.subplot(3, 1, 3)
+        bands = ['Theta', 'Beta']
+        powers = [theta_power, beta_power]
+        plt.bar(bands, powers)
+        plt.ylabel('Power')
+        plt.title(f'Band Power Comparison (TBR = {power_ratio:.2f})')
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+    return power_ratio
+
+
+# def compute_power_ratio2(eeg_data, Fs, theta_band, beta_band, alpha_band=None, show_plots=False):
+#     """
+#     计算(theta + alpha)/beta功率比
+#
+#     参数:
+#         eeg_data: 输入EEG信号
+#         Fs: 采样频率
+#         theta_band: theta波段范围 [low, high] (Hz)
+#         beta_band: beta波段范围 [low, high] (Hz)
+#         alpha_band: alpha波段范围 [low, high] (Hz)，默认[8, 13]
+#         show_plots: 是否显示图形
+#
+#     返回:
+#         power_ratio: (theta_power + alpha_power)/beta_power
+#     """
+#     # 设置默认alpha波段
+#     if alpha_band is None:
+#         alpha_band = [8, 13]
+#
+#     # Chebyshev Type II滤波器参数
+#     Rp = 3  # 通带波纹(dB)
+#     Rs = 40  # 阻带衰减(dB)
+#
+#     # 设计theta波段滤波器
+#     f1_theta = theta_band[0] / (Fs / 2)
+#     f2_theta = theta_band[1] / (Fs / 2)
+#     n_theta, Wn_theta = cheb2ord([f1_theta, f2_theta],
+#                                  [f1_theta * 0.8, f2_theta * 1.2],
+#                                  Rp, Rs)
+#     b_theta, a_theta = cheby2(n_theta, Rs, Wn_theta, 'bandpass')
+#
+#     # 设计alpha波段滤波器
+#     f1_alpha = alpha_band[0] / (Fs / 2)
+#     f2_alpha = alpha_band[1] / (Fs / 2)
+#     n_alpha, Wn_alpha = cheb2ord([f1_alpha, f2_alpha],
+#                                  [f1_alpha * 0.8, f2_alpha * 1.2],
+#                                  Rp, Rs)
+#     b_alpha, a_alpha = cheby2(n_alpha, Rs, Wn_alpha, 'bandpass')
+#
+#     # 设计beta波段滤波器
+#     f1_beta = beta_band[0] / (Fs / 2)
+#     f2_beta = beta_band[1] / (Fs / 2)
+#     n_beta, Wn_beta = cheb2ord([f1_beta, f2_beta],
+#                                [f1_beta * 0.8, f2_beta * 1.2],
+#                                Rp, Rs)
+#     b_beta, a_beta = cheby2(n_beta, Rs, Wn_beta, 'bandpass')
+#
+#     # 滤波处理（使用filtfilt实现零相位滤波）
+#     theta_filtered = filtfilt(b_theta, a_theta, eeg_data)
+#     alpha_filtered = filtfilt(b_alpha, a_alpha, eeg_data)
+#     beta_filtered = filtfilt(b_beta, a_beta, eeg_data)
+#
+#     # 计算各波段功率（使用均方值更稳定）
+#     theta_power = np.mean(theta_filtered ** 2)
+#     alpha_power = np.mean(alpha_filtered ** 2)
+#     beta_power = np.mean(beta_filtered ** 2)
+#
+#     # 计算(theta + alpha)/beta功率比
+#     epsilon = 1e-12  # 防止除以零的小量
+#     power_ratio = (theta_power + alpha_power) / (beta_power + epsilon)
+#
+#     # 可视化（仅在需要时显示）
+#     if show_plots:
+#         plt.figure(figsize=(15, 12))
+#
+#         # 时域信号
+#         t = np.arange(len(eeg_data)) / Fs
+#         plt.subplot(4, 1, 1)
+#         plt.plot(t, eeg_data, label='原始信号')
+#         plt.plot(t, theta_filtered, label=f'Theta ({theta_band[0]}-{theta_band[1]}Hz)')
+#         plt.plot(t, alpha_filtered, label=f'Alpha ({alpha_band[0]}-{alpha_band[1]}Hz)')
+#         plt.plot(t, beta_filtered, label=f'Beta ({beta_band[0]}-{beta_band[1]}Hz)')
+#         plt.xlabel('时间(s)')
+#         plt.ylabel('幅值')
+#         plt.title('滤波后信号对比')
+#         plt.legend()
+#         plt.grid(True)
+#
+#         # 功率谱密度
+#         freqs, psd = welch(eeg_data, fs=Fs, nperseg=1024)
+#         _, theta_psd = welch(theta_filtered, fs=Fs, nperseg=1024)
+#         _, alpha_psd = welch(alpha_filtered, fs=Fs, nperseg=1024)
+#         _, beta_psd = welch(beta_filtered, fs=Fs, nperseg=1024)
+#
+#         plt.subplot(4, 1, 2)
+#         plt.semilogy(freqs, psd, label='原始信号')
+#         plt.semilogy(freqs, theta_psd, label='Theta波段')
+#         plt.semilogy(freqs, alpha_psd, label='Alpha波段')
+#         plt.semilogy(freqs, beta_psd, label='Beta波段')
+#         plt.xlabel('频率(Hz)')
+#         plt.ylabel('功率谱密度')
+#         plt.title('功率谱密度对比')
+#         plt.legend()
+#         plt.grid(True)
+#         plt.xlim([0, 40])  # 聚焦0-40Hz范围
+#
+#         # 波段功率对比
+#         plt.subplot(4, 1, 3)
+#         bands = ['Theta', 'Alpha', 'Beta']
+#         powers = [theta_power, alpha_power, beta_power]
+#         plt.bar(bands, powers)
+#         plt.ylabel('功率(μV²)')
+#         plt.title('各波段功率对比')
+#         plt.grid(True)
+#
+#         # 添加功率比信息
+#         plt.subplot(4, 1, 4)
+#         plt.axis('off')
+#         plt.text(0.5, 0.5,
+#                  f'(Theta + Alpha)/Beta 功率比 = {power_ratio:.2f}\n\n'
+#                  f'Theta功率: {theta_power:.2e}\n'
+#                  f'Alpha功率: {alpha_power:.2e}\n'
+#                  f'Beta功率: {beta_power:.2e}',
+#                  ha='center', va='center', fontsize=12)
+#
+#         plt.tight_layout()
+#         plt.show()
+#
+#     return power_ratio
+
+# from typing import Tuple, List, Optional
+#
+#
+# def bior68_wavelet_denoise(
+#     signal: np.ndarray,
+#     fs: int = 250,
+#     wavelet: str = 'bior6.8',
+#     level: Optional[int] = None,
+#     threshold_mode: str = 'adaptive',
+#     hard_threshold: bool = False,
+#     noise_std: Optional[float] = None
+# ) -> np.ndarray:
+#     """
+#     增强版小波去噪（可调节去噪力度）
+#
+#     参数:
+#         signal: 输入信号
+#         fs: 采样频率
+#         wavelet: 小波类型（默认bior6.8）
+#         level: 分解层数（自动计算若为None）
+#         threshold_mode: 阈值模式 ('adaptive', 'universal', 'manual')
+#         hard_threshold: 是否使用硬阈值（默认软阈值）
+#         noise_std: 手动指定噪声标准差（可选）
+#
+#     返回:
+#         去噪后的信号
+#     """
+#     # 1. 自动计算最佳分解层数（比标准更激进）
+#     if level is None:
+#         level = min(8, int(np.log2(len(signal))) - 3)
+#         level = max(level, 1)  # 至少1层
+#
+#     # 2. 小波分解
+#     coeffs = pywt.wavedec(signal, wavelet, level=level)
+#
+#     # 3. 噪声估计
+#     if noise_std is None:
+#         noise_std = np.median(np.abs(coeffs[-1])) / 0.6745
+#
+#     # 4. 增强阈值策略
+#     detail_coeffs = coeffs[1:]
+#     for i, detail in enumerate(detail_coeffs):
+#         N = len(detail)
+#
+#         if threshold_mode == 'adaptive':
+#             # 层自适应阈值（更激进的系数衰减）
+#             threshold = noise_std * np.sqrt(2 * np.log(N)) / np.log2(i + 2)
+#         elif threshold_mode == 'universal':
+#             threshold = noise_std * np.sqrt(2 * np.log(N))
+#         else:  # manual
+#             threshold = noise_std * 1.5  # 手动调整系数
+#
+#         # 应用阈值
+#         if hard_threshold:
+#             detail_coeffs[i] = pywt.threshold(detail, threshold, mode='hard')
+#         else:
+#             # 增强型软阈值（更激进）
+#             abs_val = np.abs(detail)
+#             sign = np.sign(detail)
+#             detail_coeffs[i] = sign * np.where(
+#                 abs_val > threshold,
+#                 abs_val - threshold * 1.2,  # 增加衰减力度
+#                 0
+#             )
+#
+#     # 5. 重构信号
+#     coeffs[1:] = detail_coeffs
+#     return pywt.waverec(coeffs, wavelet)[:len(signal)]
+
+
 
