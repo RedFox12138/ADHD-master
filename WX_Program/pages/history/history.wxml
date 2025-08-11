@@ -1,0 +1,36 @@
+<!-- pages/history/history.wxml -->
+<view class="container">
+  <!-- 日期选择 -->
+  <view wx:if="{{!showChart}}">
+    <view class="date-list">
+      <view wx:for="{{historyDates}}" 
+            wx:key="value"
+            class="date-item"
+            bindtap="selectDate"
+            data-date="{{item.value}}">
+        {{item.text}}
+      </view>
+    </view>
+
+    <!-- 修改后的文件列表部分 -->
+<view class="file-list" wx:if="{{selectedDate}}">
+  <scroll-view scroll-y style="height: 300px;">
+    <view wx:for="{{historyFiles}}" 
+          wx:key="name"
+          class="file-item"
+          bindtap="viewFile"
+          data-file="{{item.fullName}}">
+      <text class="file-name">{{item.name}}</text>
+    </view>
+  </scroll-view>
+</view>
+  </view>
+
+  <!-- 图表视图 -->
+  <view class="chart-container">
+  <canvas canvas-id="historyChart" class="chart"></canvas>
+  <button bindtap="backToList">返回</button>
+</view>
+
+  <loading wx:if="{{loading}}">加载中...</loading>
+</view>
