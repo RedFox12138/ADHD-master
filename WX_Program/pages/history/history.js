@@ -23,7 +23,7 @@ Page({
   loadHistoryDates: function() {
     this.getUserId().then(user_id => {
       wx.request({
-        url: 'http://4nbsf9900182.vicp.fun:18595/getHistoryDates',
+        url: 'http://xxyeeg.zicp.fun/getHistoryDates',
         method: 'POST',
         data: { userId: user_id },
         success: (res) => {
@@ -80,7 +80,7 @@ Page({
             success: (res) => {
               if (res.code) {
                 wx.request({
-                  url: 'http://4nbsf9900182.vicp.fun:18595/getOpenId',
+                  url: 'http://xxyeeg.zicp.fun/getOpenId',
                   method: 'POST',
                   data: { code: res.code },
                   success: (res) => {
@@ -114,7 +114,7 @@ Page({
   loadDateFiles: function() {
     this.getUserId().then(user_id => {
       wx.request({
-        url: 'http://4nbsf9900182.vicp.fun:18595/getHistoryFiles',
+        url: 'http://xxyeeg.zicp.fun/getHistoryFiles',
         method: 'POST',
         data: { 
           userId: user_id,
@@ -164,7 +164,7 @@ Page({
     const file = e.currentTarget.dataset.file
     this.getUserId().then(user_id => {
       wx.request({
-        url: 'http://4nbsf9900182.vicp.fun:18595/getHistoryFile',
+        url: 'http://xxyeeg.zicp.fun/getHistoryFile',
         method: 'POST',
         data: { 
           userId: user_id,

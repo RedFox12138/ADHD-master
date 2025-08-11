@@ -351,7 +351,7 @@ generateMathProblem: function() {
         success: (res) => {
           if (res.code) {
             wx.request({
-              url: 'http://4nbsf9900182.vicp.fun:18595/getOpenId',
+              url: 'http://xxyeeg.zicp.fun/getOpenId',
               method: 'POST',
               data: { code: res.code },
               success: (res) => {
@@ -381,7 +381,7 @@ generateMathProblem: function() {
       receivedData = receivedData.slice(batch_len);
       // console.log(this.data.currentPhase);
       wx.request({
-        url: 'http://4nbsf9900182.vicp.fun:18595/process', 
+        url: 'http://xxyeeg.zicp.fun/process', 
         method: 'POST',
         data: {
           points: dataToSend,
