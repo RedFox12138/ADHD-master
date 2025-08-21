@@ -63,7 +63,12 @@ Page({
     },
     sceneTimer: 0,      // 场景计时器（秒）
     sceneChanged: false, // 场景是否刚变化
-    sceneCooldown: false // 场景切换冷却状态
+    sceneCooldown: false, // 场景切换冷却状态
+    
+    sceneTransitionProgress: 0, // 0-1表示过渡进度
+    nextScene: null,            // 下一个场景
+    isTransitioning: false,      // 是否正在过渡
+    boundaryLock: false, // 边界位置锁定状态
   },
 
   onLoad: function() {
@@ -242,17 +247,15 @@ startTreatmentPhase: function() {
   },
   
   updateGameState: function() {
-    if (!this.data.gameStarted || this.data.gameOver || this.data.sceneCooldown) return;
-    
-    // 基准阶段不移动小鸟
+    if (!this.data.gameStarted || this.data.gameOver || 
+        this.data.sceneCooldown || this.data.boundaryLock) return;
     if (this.data.currentPhase === '基准阶段') return;
     
-    // 计算注意力差值
     const attentionDiff = this.data.currentAttention - this.data.baselineValue;
-    
-    // 更新小鸟位置（带速度限制）
     let newBirdY = this.data.birdY;
-    const speed = 0.15; // 降低速度防止过冲
+    
+    // 动态速度计算
+    const speed = 0.1 + Math.abs(attentionDiff) * 0.02;
     
     if (attentionDiff > 0) {
       newBirdY = Math.max(5, newBirdY - speed);
@@ -260,60 +263,79 @@ startTreatmentPhase: function() {
       newBirdY = Math.min(95, newBirdY + speed);
     }
     
-    // 强制边界锁定
-    if (newBirdY <= 5) newBirdY = 5;
-    if (newBirdY >= 95) newBirdY = 95;
-    
     this.setData({ birdY: newBirdY });
     
-    // 场景检查（带冷却检测）
+    // 只在到达边界时检查场景切换
     if (newBirdY === 5 || newBirdY === 95) {
       this.checkSceneChange(newBirdY, attentionDiff);
     }
   },
 
-checkSceneChange: function(newBirdY, attentionDiff) {
-  if (this.data.sceneCooldown) return;
-  
-  const currentScene = this.data.currentScene;
-  const currentLevel = this.data.scenes[currentScene].level;
-  
-  // 精确逐级切换逻辑
-  let targetLevel = currentLevel;
-  if (newBirdY === 5 && attentionDiff > 0) {
-    targetLevel = Math.min(currentLevel + 1, 3); // 最大层级3
-  } else if (newBirdY === 95 && attentionDiff < 0) {
-    targetLevel = Math.max(currentLevel - 1, -2); // 最小层级-2
-  } else {
-    return;
-  }
-  
-  // 查找目标场景
-  const targetScene = Object.entries(this.data.scenes).find(
-    ([_, s]) => s.level === targetLevel
-  );
-  
-  if (targetScene) {
-    // 开启冷却
-    this.setData({ sceneCooldown: true });
+  checkSceneChange: function(newBirdY, attentionDiff) {
+    if (this.data.sceneCooldown || this.data.isTransitioning) return;
     
-    // 执行切换
-    const [newSceneKey] = targetScene;
-    this.setData({
-      currentScene: newSceneKey,
-      birdY: targetLevel > currentLevel ? 95 : 5,
-      sceneChanged: true
-    });
+    const currentScene = this.data.currentScene;
+    const currentLevel = this.data.scenes[currentScene].level;
     
-    // 调试日志
-    console.log(`[切换] ${currentScene}(${currentLevel}) → ${newSceneKey}(${targetLevel})`);
+    let targetLevel = currentLevel;
+    let resetPosition = newBirdY; // 记录要重置的位置
     
-    // 冷却计时器（500ms内禁止再次切换）
-    setTimeout(() => {
-      this.setData({ sceneCooldown: false });
-    }, 500);
-  }
-},
+    // 确定目标层级和重置位置
+    if (newBirdY === 5 && attentionDiff > 0) {
+      targetLevel = Math.min(currentLevel + 1, 3); // 向上切换
+      resetPosition = 95; // 切换到上方场景后重置到下方
+    } else if (newBirdY === 95 && attentionDiff < 0) {
+      targetLevel = Math.max(currentLevel - 1, -2); // 向下切换
+      resetPosition = 5; // 切换到下方场景后重置到上方
+    } else {
+      return;
+    }
+    
+    const targetScene = Object.entries(this.data.scenes).find(
+      ([_, s]) => s.level === targetLevel
+    );
+    
+    if (targetScene) {
+      const [newSceneKey] = targetScene;
+      
+      // 开始过渡
+      this.setData({
+        nextScene: newSceneKey,
+        isTransitioning: true,
+        sceneCooldown: true,
+        boundaryLock: true // 锁定边界防止重复触发
+      });
+      
+      // 过渡动画
+      const duration = 800;
+      const steps = 20;
+      const interval = duration / steps;
+      let progress = 0;
+      
+      const transitionTimer = setInterval(() => {
+        progress += (1 / steps);
+        if (progress >= 1) {
+          clearInterval(transitionTimer);
+          this.setData({
+            currentScene: newSceneKey,
+            nextScene: null,
+            isTransitioning: false,
+            sceneTransitionProgress: 0,
+            birdY: resetPosition, // 重置小鸟位置
+            boundaryLock: false // 解除锁定
+          });
+          
+          // 冷却计时器
+          setTimeout(() => {
+            this.setData({ sceneCooldown: false });
+          }, 500);
+        } else {
+          this.setData({ sceneTransitionProgress: progress });
+        }
+      }, interval);
+    }
+  },
+  
 
 // 添加新的方法：开始数学题定时器
 startMathProblemTimer: function() {

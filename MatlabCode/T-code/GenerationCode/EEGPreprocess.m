@@ -26,16 +26,6 @@ else
 end
 
 out = [];
-%% filter
-% [b,a] = butter(6,0.5/(fs/2),'high'); % 0.5Hz高通巴特沃斯 
-% % freqz(b,a,[],250)
-% d1 = filter(b, a, d1);
-% 
-% [b,a] = butter(4,[49 51]/(fs/2),'stop'); % 50Hz 工频陷波
-% d1 = filter(b, a, d1);
-% 
-% [b,a] = butter(6,100/(fs/2),'low'); % 100Hz低通
-% d1 = filter(b, a, d1);
 % 
 d1 = signal;
 % 二阶50 Hz的陷波

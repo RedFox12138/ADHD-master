@@ -35,7 +35,6 @@
     wx:if="{{nextScene}}"
   />
     
-    
   <view class="bird-container" style="top: {{birdY}}%">
 
   <!-- 小鸟图片 -->

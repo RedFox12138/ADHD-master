@@ -1,4 +1,9 @@
-function [PWR,f] =  LFP_Win_Process(data,Fs,index,win_length,DenoiseMethod)
+function [PWR,f] = LFP_Win_Process(data,Fs,index,win_length,DenoiseMethod)
+
+% 检查输入数据是否为行向量，如果是就转换为列向量
+if size(data,1) == 1 && size(data,2) > 1
+    data = data';
+end
 
 k = 0;
 PWR = [];
@@ -12,8 +17,8 @@ while (end_index+1)<=size(data,1)
     %%
     % 第一步：信号预处理
     
-    [~,d1_denoised] = EEGPreprocess(d1, Fs, DenoiseMethod);
-%     d1_denoised = d1;
+%     [~,d1_denoised] = EEGPreprocess(d1, Fs, DenoiseMethod);
+    d1_denoised = d1;
  
     rms(d1_denoised)
     
@@ -22,7 +27,7 @@ while (end_index+1)<=size(data,1)
 %         disp('signal discard')
 %         start_index = start_index + 0.5;
 %         end_index = (start_index+win_length)*Fs;
-% 
+%
 %         continue; % 超过幅值，丢弃
 %     end
 %     rms(d1_denoised)
