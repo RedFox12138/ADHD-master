@@ -17,8 +17,8 @@ while (end_index+1)<=size(data,1)
     %%
     % 第一步：信号预处理
     
-%     [~,d1_denoised] = EEGPreprocess(d1, Fs, DenoiseMethod);
-    d1_denoised = d1;
+    [~,d1_denoised] = EEGPreprocess(d1, Fs, DenoiseMethod);
+%     d1_denoised = d1;
  
     rms(d1_denoised)
     

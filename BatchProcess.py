@@ -6,8 +6,7 @@ from vmdpy import VMD
 
 from EogRemovalNew import optimized_dwt_eog_removal
 from PreProcess import preprocess3
-from SingleDenoise import eog_removal
-
+from SingleDenoise import eog_removal, eog_removal_adaptive
 
 
 def process_txt_file(txt_path, output_folder, fs=250):
@@ -23,7 +22,7 @@ def process_txt_file(txt_path, output_folder, fs=250):
     # 对整个信号进行预处理
     processed_signal,_ = preprocess3(data, fs)
 
-    processed_signal = eog_removal(processed_signal, 250, False)
+    processed_signal = eog_removal(processed_signal, 250, True)
     # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
 
 
@@ -96,7 +95,7 @@ def batch_process_txt_folder(input_folder, output_folder):
 
 # 使用示例
 if __name__ == "__main__":
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\oksQL7aHWZ0qkXkFP-oC05eZugE8\\额头追踪或躲避游戏'  # 替换为你的txt文件夹路径
     output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
 
     batch_process_txt_folder(input_folder, output_folder)

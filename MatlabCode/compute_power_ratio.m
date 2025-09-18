@@ -1,4 +1,4 @@
-function power_ratio = compute_power_ratio(eeg_data, Fs, delta_band, theta_band, beta_band)
+function power_ratio = compute_power_ratio(eeg_data, Fs, theta_band, beta_band)
     % 参数设置
     nfft = min(1024, length(eeg_data)); % FFT点数
     window = hamming(min(256, length(eeg_data)/4)); % 窗函数
@@ -8,26 +8,14 @@ function power_ratio = compute_power_ratio(eeg_data, Fs, delta_band, theta_band,
     [pxx, f] = pwelch(eeg_data, window, noverlap, nfft, Fs);
     
     % 计算各频段功率（单位：μV²/Hz）
-    delta_power = bandpower(pxx, f, delta_band, 'psd');
+%     delta_power = bandpower(pxx, f, delta_band, 'psd');
     theta_power = bandpower(pxx, f, theta_band, 'psd');
     beta_power  = bandpower(pxx, f, beta_band, 'psd');
     
-%     % 调试输出
-%     fprintf('Delta: %.2e, Theta: %.2e, Beta: %.2e\n',...
-%             delta_power, theta_power, beta_power);
-    
-    % 计算功率比（添加极小量防止除以0）
+
     epsilon = 1e-12;
-    power_ratio = (delta_power + theta_power) / (beta_power + epsilon);
-    
-%     % 可视化功率谱（调试用）
-%     figure;
-%     plot(f, 10*log10(pxx));
-%     xlabel('Frequency (Hz)');
-%     ylabel('Power/frequency (dB/Hz)');
-%     title('Power Spectral Density');
-%     grid on;
-%     xlim([0 40]);
+    power_ratio = (theta_power) / (beta_power + epsilon);
+%     power_ratio = theta_power;
 end
 % 
 % function power_ratio = compute_power_ratio(eeg_data, Fs, delta_band, theta_band, beta_band)

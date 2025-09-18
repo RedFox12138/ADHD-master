@@ -126,9 +126,8 @@ def process_data():
             processed_points = eog_removal(processed_points, 250, False)
             tbr = compute_power_ratio(processed_points, fs, theta_band, beta_band)
 
-
-            # print(session['Base_flag'])
-            if Step == '基准阶段' :
+            # 如果不是日常在屏蔽间测数据，删掉下面的1==1
+            if Step == '基准阶段' or 1==1:
                 tbr_list.append(tbr)
                 session['tbr_base_list'].append(tbr)
 

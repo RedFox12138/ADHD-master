@@ -29,6 +29,7 @@ out = [];
 % 
 d1 = signal;
 % 二阶50 Hz的陷波
+% [ d1 ] = IIR( d1,fs,25 );
 [ d1 ] = IIR( d1,fs,50 );
 [ d1 ] = IIR( d1,fs,100 );
 base = medfilt1(d1,125);  
