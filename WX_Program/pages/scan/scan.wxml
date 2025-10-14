@@ -1,25 +1,90 @@
 <view class="container">
-  <view class="status-bar">
-    搜索状态：{{discovering ? '正在搜索...' : '已停止'}}
+  <!-- 头部标题 -->
+  <view class="header">
+    <view class="title">🔍 蓝牙设备扫描</view>
+    <view class="subtitle">寻找附近的ADHD检测设备</view>
   </view>
 
-  <view wx:if="{{devices.length}}" class="device-list">
-    <view 
-      wx:for="{{devices}}"
+  <!-- 搜索框 -->
+  <view class="search-section">
+    <view class="search-box">
+      <view class="search-icon">🔍</view>
+      <input
+        class="search-input"
+        placeholder="输入设备名称进行搜索..."
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <view class="clear-icon" wx:if="{{searchKeyword}}" bindtap="clearSearch">✕</view>
+    </view>
+    <view class="search-tips" wx:if="{{searchKeyword && filteredDevices.length === 0 && allDevices.length > 0}}">
+      <text>未找到包含"{{searchKeyword}}"的设备</text>
+    </view>
+  </view>
+
+  <view class="status-bar">
+    <view class="status-icon">{{discovering ? '📡' : '⏸️'}}</view>
+    <view class="status-text">{{discovering ? '正在搜索设备中...' : '搜索已停止'}}</view>
+  </view>
+
+  <view wx:if="{{displayDevices.length}}" class="device-list">
+    <view class="list-header">
+      <view class="device-count">
+        {{searchKeyword ? '搜索到 ' + displayDevices.length + ' 个设备' : '发现 ' + displayDevices.length + ' 个设备'}}
+      </view>
+      <button class="filter-btn" bindtap="toggleFilter">
+        {{showOnlyNamed ? '显示全部' : '仅显示有名称'}}
+      </button>
+    </view>
+    <view
+      wx:for="{{displayDevices}}"
       wx:key="deviceId"
       class="device-item {{connectedId === item.deviceId ? 'connected' : ''}}"
       bindtap="connectDevice"
       data-device="{{item}}"
     >
-      <text class="name">{{item.name || '未知设备'}}</text>
-      <text class="signal">信号强度: {{item.RSSI}}dBm</text>
-      <text class="id">{{item.deviceId}}</text>
+      <view class="device-icon">
+        {{connectedId === item.deviceId ? '✅' : '📱'}}
+      </view>
+      <view class="device-info">
+        <text class="name">{{item.name || '未知设备'}}</text>
+        <view class="device-details">
+          <text class="signal">📶 信号强度: {{item.RSSI}}dBm</text>
+          <text class="id">🆔 {{item.deviceId}}</text>
+        </view>
+      </view>
+      <view class="connect-btn" wx:if="{{connectedId !== item.deviceId}}">
+        连接
+      </view>
+      <view class="connected-badge" wx:if="{{connectedId === item.deviceId}}">
+        已连接
+      </view>
     </view>
   </view>
 
   <view wx:else class="empty">
-    未发现蓝牙设备，请确保：
-    <text>1. 设备已开启蓝牙并处于可发现模式</text>
-    <text>2. 手机已开启位置服务（Android需要）</text>
+    <view class="empty-icon">📡</view>
+    <view class="empty-title" wx:if="{{!searchKeyword}}">未发现蓝牙设备</view>
+    <view class="empty-title" wx:else>未找到匹配的设备</view>
+    <view class="empty-tips" wx:if="{{!searchKeyword}}">
+      <view class="tip-item">💡 确保设备已开启蓝牙并处于可发现模式</view>
+      <view class="tip-item">📍 请开启手机位置服务（Android需要）</view>
+      <view class="tip-item">🔄 尝试重新进入页面刷新搜索</view>
+    </view>
+    <view class="empty-tips" wx:else>
+      <view class="tip-item">🔍 请尝试其他关键词或清空搜索条件</view>
+      <view class="tip-item">📱 确保目标设备在搜索范围内</view>
+    </view>
+  </view>
+
+  <!-- 底部操作按钮 -->
+  <view class="bottom-actions">
+    <button class="action-btn primary" bindtap="startDiscovery" disabled="{{discovering}}">
+      {{discovering ? '搜索中...' : '🔍 重新搜索'}}
+    </button>
+    <button class="action-btn secondary" bindtap="stopDiscovery" disabled="{{!discovering}}">
+      ⏹️ 停止搜索
+    </button>
   </view>
 </view>

@@ -1,5 +1,9 @@
 import os
 import sys
+
+from EntropyHub import SampEn
+
+from SampEn import SampEn_optimized
 from SingleDenoise import eog_removal
 sys.path.append('D:\\anaconda\\lib\\site-packages')
 import threading
@@ -109,33 +113,31 @@ def process_data():
                 f.write(f"{p}\n")
             f.flush()
 
-        delta_cumavg = None
 
         with session_lock:
             session = user_sessions[user_id]
             processing_buffer = session['processing_buffer']
 
-        Delta_power_list = []
-
-
-        while len(processing_buffer) >= 1500:  # 6秒窗口（1500点）
+        while len(processing_buffer) >= 1500: # 6秒窗口（1500点）
             raw_window = processing_buffer[:1500]
             processed_points, _ = preprocess3(raw_window, fs)
-            theta_band = [4, 8]
-            beta_band = [13, 30]
             processed_points = eog_removal(processed_points, 250, False)
-            tbr = compute_power_ratio(processed_points, fs, theta_band, beta_band)
+
+            # theta_band = [4, 8]
+            # beta_band = [13, 30]
+            # tbr = compute_power_ratio(processed_points, fs, theta_band, beta_band)
+
+            samp = SampEn_optimized(processed_points)
+            tbr = samp[0][2]
+
+            # tbr = 1
 
             # 如果不是日常在屏蔽间测数据，删掉下面的1==1
-            if Step == '基准阶段' or 1==1:
+            if Step == '基准阶段' :
                 tbr_list.append(tbr)
                 session['tbr_base_list'].append(tbr)
-
-                # delta_cumavg = calculate_delta_cumavg(processed_points, Step,fs, session)*100
-                # session['Base_value'] = delta_cumavg
-
-                delta_cumavg = np.mean(session['tbr_base_list'][-40:])
-                session['Base_value'] = delta_cumavg
+                tbr_cumavg = np.mean(session['tbr_base_list'])
+                session['Base_value'] = tbr_cumavg
 
             elif(Step == '治疗阶段') :
                 #治疗阶段刚开始的时候，把上一次基准阶段的最终值记录下来
@@ -147,11 +149,6 @@ def process_data():
 
                 tbr_list.append(tbr)
 
-                # delta_cumavg = calculate_delta_cumavg(processed_points, Step, fs, session)*100
-                # Delta_power_list.append(delta_cumavg)
-
-                Delta_power_list.append(tbr)
-
             # 更新绘图缓冲区
             processed_raw_buffer.extend(raw_window)
             processed_processed_buffer.extend(processed_points)
@@ -161,16 +158,10 @@ def process_data():
                 session['processing_buffer'] = processing_buffer[125:]
                 processing_buffer = session['processing_buffer']
 
-        if Delta_power_list != []:
-            delta_cumavg = np.mean(Delta_power_list)
-            with open(delta_file, 'a') as f:
-                f.write(f"{delta_cumavg}\n")
-                f.flush()
 
         return jsonify({
             "status": "success",
-            "TBR": tbr_list,
-            "DeltaCumAvg": delta_cumavg  # 返回真正的累积平均值
+            "TBR": tbr_list
         })
 
 

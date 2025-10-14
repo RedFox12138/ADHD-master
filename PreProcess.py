@@ -6,7 +6,7 @@ sys.path.append('D:\\anaconda\\lib\\site-packages')
 from matplotlib import pyplot as plt
 from scipy import signal
 import numpy as np
-from scipy.signal import cheby2, filtfilt, welch, medfilt
+from scipy.signal import cheby2, filtfilt, welch, medfilt, firwin
 
 """
    该代码存放了滤波的函数，减少了前后失真
@@ -15,41 +15,81 @@ from scipy.signal import cheby2, filtfilt, welch, medfilt
 # 使用非交互式后端
 plt.switch_backend('TkAgg')
 
+from scipy.signal import butter, filtfilt, iirnotch, medfilt
 
-# # 预处理函数
-# def preprocess1(OriginalSignal, fs=250):
-#     # out = input.shape[0]
-#     # step1: 滤波
-#     d1 = OriginalSignal
-#     b, a = signal.butter(6, 0.5 / (fs / 2), 'highpass')  # 0.5Hz 高通巴特沃斯滤波器
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, [49 / (fs / 2), 51 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, [99 / (fs / 2), 101 / (fs / 2)], 'bandstop')  # 50Hz 工频干扰
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     b, a = signal.butter(6, 40/ (fs / 2), 'lowpass')  # 100Hz 低通
-#     d1 = signal.filtfilt(b, a, d1)
-#
-#     theta_band = [4,8]
-#     beta_band = [13,30]
-#     power_ratio = compute_power_ratio(d1, fs, theta_band, beta_band)
-#
-#     return d1,power_ratio
+
+def preprocess3_fir(x, Fs, visualize=False):
+    """
+    使用标准的 FIR 带通和带阻滤波器实现的预处理流程。
+
+    参数:
+        x (np.ndarray): 输入的原始EEG信号。
+        Fs (int): 信号的采样率。
+        visualize (bool): 是否显示滤波前后的对比图。
+
+    返回:
+        tuple: (处理后的信号, theta/beta 功率比)。
+    """
+    # 复制输入信号，避免修改原始数据
+    d1 = np.copy(x)
+
+    # 滤波器阶数，一个合理的初始值，可以根据需要调整
+    # 阶数越高，滤波器越陡峭，但计算成本和延迟也越高
+    numtaps = 251  # 确保为奇数以获得 Type I 滤波器
+
+    # 步骤 1: 50Hz 和 100Hz 陷波滤波 (FIR 带阻)
+    # 设计 50Hz FIR 带阻滤波器 (例如，阻断 49-51Hz)
+    h_notch_50 = firwin(numtaps, [49, 51], fs=Fs, pass_zero=True, window='hamming')
+    d1 = filtfilt(h_notch_50, [1.0], d1)
+
+    # 设计 100Hz FIR 带阻滤波器 (例如，阻断 99-101Hz)
+    h_notch_100 = firwin(numtaps, [99, 101], fs=Fs, pass_zero=True, window='hamming')
+    d1 = filtfilt(h_notch_100, [1.0], d1)
+
+    # 步骤 2: 基线漂移去除 (与原函数保持一致)
+    # 使用中值滤波去除低频基线漂移
+    d1 = d1 - medfilt(d1, kernel_size=int(0.5 * Fs) + 1)
+
+    # 步骤 3: 0.5Hz - 40Hz 带通滤波 (FIR)
+    # 设计一个 FIR 带通滤波器
+    h_bandpass = firwin(numtaps, [0.5, 40], btype='band', fs=Fs, pass_zero=False, window='hamming')
+    # 应用零相位带通滤波
+    d1 = filtfilt(h_bandpass, [1.0], d1)
+
+    # 步骤 4: 计算功率比 (与原函数保持一致)
+    # 假设 compute_power_ratio 函数已定义
+    # theta_band = [4, 8]
+    # beta_band = [13, 30]
+    # power_ratio = compute_power_ratio(d1, Fs, theta_band, beta_band)
+    power_ratio = None # 暂时设为 None
+
+    # 可选：可视化处理结果
+    if visualize:
+        t = np.arange(len(x)) / Fs
+        plt.figure(figsize=(15, 6))
+        plt.plot(t, x, label='Original Signal', alpha=0.7)
+        plt.plot(t, d1, label='Processed Signal (FIR)', color='green', linewidth=1.5)
+        plt.title('Original vs. Processed EEG Signal (Standard FIR Filters)')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    return d1, power_ratio
+
 
 
 def preprocess3(x, Fs):
     d1 = IIR(x,Fs,50)
     d1 = IIR(d1, Fs, 100)
-    d1 = d1 - medfilt(d1, kernel_size=125)
+    # d1 = d1 - medfilt(d1, kernel_size=501)
     d1 = HPF(d1, Fs, 0.5);
-    d1 = LPF(d1, Fs, 80);
-    theta_band = [4, 8]
-    beta_band = [13, 30]
-    power_ratio = compute_power_ratio(d1, Fs, theta_band, beta_band)
-    return d1,power_ratio
+    d1 = LPF(d1, Fs, 40);
+    # theta_band = [4, 8]
+    # beta_band = [13, 30]
+    # power_ratio = compute_power_ratio(d1, Fs, theta_band, beta_band)
+    return d1,1
 
 
 import math

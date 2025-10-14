@@ -6,11 +6,11 @@ import numpy as np
    该程序实现了两种样本熵的计算方式
 """
 
-def SampleEntropy2(Datalist, r, m=2):
+def SampleEntropy2(Datalist, r=0.2, m=2):
     th = r * np.std(Datalist)  # 容限阈值
     return EH.SampEn(Datalist, m, r=th)
 
-def sample_entropy(time_series, m, r):
+def sample_entropy(time_series, m=2, r=0.2):
 
     N = len(time_series)
     # 数据标准化

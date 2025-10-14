@@ -1,20 +1,23 @@
 <view class="container">
   <!-- 连接状态显示 -->
-  <view class="status">
-    连接状态：{{connected ? '已连接 ' + deviceName : '未连接'}}
+  <view class="status-card">
+    <view class="status">
+      连接状态：{{connected ? '已连接 ' + deviceName : '未连接'}}
+    </view>
   </view>
   
   <!-- 图表区域 -->
-  <canvas 
-    canvas-id="eegChart" 
-    style="width:100%; height:200px;"
-    disable-scroll="true"
-  ></canvas>
-  
+  <view class="chart-container">
+    <canvas
+      canvas-id="eegChart"
+      style="width:100%; height:200px;"
+      disable-scroll="true"
+    ></canvas>
+  </view>
+
   <!-- 参数显示 -->
   <view class="parameter">
-    <view>Theta/Beta 功率比：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
-    <view>Delta 累计功率：{{DeltaPower !== null ? DeltaPower : '未计算'}}</view>
+    <view>⚡ 样本熵：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
   </view>
 
   <view class="game-container" wx:if="{{experimentStarted && (currentPhase === '治疗阶段' || currentPhase === '基准阶段')}}">
@@ -73,42 +76,54 @@
   <!-- 实验信息 -->
   <view class="experiment-info" wx:if="{{experimentStarted}}">
     <view wx:if="{{currentPhase === '准备阶段'}}">
-      <text>准备中：{{remainingTime}}秒后开始基准测试</text>
+      <text>🎯 准备中：{{remainingTime}}秒后开始基准测试</text>
     </view>
-    <view>实验阶段：{{currentPhase}}</view>
-    <view>剩余时间：{{remainingTime}}秒</view>
-    <view>基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
-    <view>当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
+    <view>📊 实验阶段：{{currentPhase}}</view>
+    <view>⏰ 剩余时间：{{remainingTime}}秒</view>
+    <view>📏 基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
+    <view>🧠 当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
   </view>
-  
   
   <!-- 控制按钮区域 -->
-  <view class="control-area">
-    <input 
-      class="input" 
-      placeholder="请输入十六进制数据（如：A1B2C3）" 
-      bindinput="handleInput" 
-      value="{{inputData}}" 
-    />
-    <button class="btn" bindtap="sendData">发送数据</button>
-    <button class="btn" bindtap="navigateToScan">
-      {{connected ? '重新连接' : '搜索设备'}}
-    </button>
-    <button 
-      class="btn" 
-      bindtap="startExperiment" 
-      wx:if="{{!experimentStarted && connected}}"
-    >开始实验</button>
-    <button 
-      class="btn" 
-      bindtap="stopExperiment" 
-      wx:if="{{experimentStarted}}"
-    >结束实验</button>
-    <view class="history-btn" bindtap="navigateToHistory">
-      <button class="btn history-btn" catchtap="navigateToHistory">历史记录</button>
-  </view>
-  </view>
-  
+  <view class="control-panel">
+    <!-- 数据发送区域 -->
+    <view class="input-section">
+      <input
+        class="data-input"
+        placeholder="请输入十六进制数据（如：A1B2C3）"
+        bindinput="handleInput"
+        value="{{inputData}}"
+      />
+      <button class="control-btn send-btn" bindtap="sendData">
+        📤 发送数据
+      </button>
+    </view>
 
- 
+    <!-- 主要操作按钮 -->
+    <view class="main-actions">
+      <button class="control-btn primary" bindtap="navigateToScan">
+        {{connected ? '🔄 重新连接' : '🔍 搜索设备'}}
+      </button>
+
+      <button
+        class="control-btn success"
+        bindtap="startExperiment"
+        wx:if="{{!experimentStarted && connected}}"
+      >
+        🚀 开始实验
+      </button>
+
+      <button
+        class="control-btn danger"
+        bindtap="stopExperiment"
+        wx:if="{{experimentStarted}}"
+      >
+        ⏹️ 结束实验
+      </button>
+
+      <button class="control-btn secondary" bindtap="navigateToHistory">
+        📊 历史记录
+      </button>
+    </view>
+  </view>
 </view>

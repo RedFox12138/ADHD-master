@@ -4,13 +4,28 @@ import numpy as np
 from psychopy import visual, core, event
 import random
 import time
-import pygame
 import sys
+import pygame
+
+# --- 新增: 窗口保证函数，确保 win 可用 ---
+try:
+    win
+except NameError:
+    win = None
+
+def ensure_window():
+    global win
+    try:
+        if win is None or getattr(win, 'winHandle', None) is None:
+            win = visual.Window(fullscr=True, color=(-0.8, -0.8, -0.8), screen=0, waitBlanking=True, units='norm')
+    except Exception as e:
+        print(f"创建/恢复 PsychoPy 窗口失败: {e}")
+        raise
 
 # 1. 初始化设置 (浓缩后保留)
 # ==============================================================================
 # 创建一个全屏窗口，深灰色背景
-win = visual.Window(fullscr=True, color=(-0.8, -0.8, -0.8), screen=0, waitBlanking=True, units='norm')
+ensure_window()
 
 # --- 1. 参数设置 (方便在此处统一修改) ---
 DURATION = 60  # 任务持续时间 (秒)
@@ -143,8 +158,6 @@ def attention_cloud_phase(win, duration):
     core.wait(3)
 
 
-# 2. 实验阶段函数 (只保留需要的，并新增第三阶段)
-# ==============================================================================
 def resting_phase2(duration=60):
     """静息阶段1：显示绿色十字标志"""
     # 创建顶部提示文字
@@ -275,14 +288,14 @@ def attention_racetrack_phase(duration=60):
     win.flip();
     core.wait(10)
 
-    # --- 2. 生成赛道 ---
-    waypoints = generate_figure8_track(num_points=200, scale_x=0.9, scale_y=0.9, frequency_x=2, frequency_y=3)
-    track = visual.ShapeStim(win, vertices=waypoints, closeShape=False, lineWidth=8, lineColor='gray', opacity=0.8)
+    # --- 2. 生成赛道 (缩小赛道尺寸) ---
+    waypoints = generate_figure8_track(num_points=200, scale_x=0.5, scale_y=0.4, frequency_x=2, frequency_y=3)  # 从0.9缩小到0.5和0.4
+    track = visual.ShapeStim(win, vertices=waypoints, closeShape=False, lineWidth=6, lineColor='gray', opacity=0.8)  # 线条也稍微细一点
 
     # --- 3. 初始化赛车 (核心修改处) ---
     NUM_RACERS = 5
-    RACER_SIZE = 0.1  # 稍微增大尺寸以便看清形状
-    BASE_SPEED = 0.8
+    RACER_SIZE = 0.08  # 稍微减小尺寸，从0.1改为0.08
+    BASE_SPEED = 0.4   # 大幅降低速度，从0.8改为0.4
 
     # 定义形状列表和统一的颜色
     SHAPES = ['circle', 'square', 'triangle', 'diamond', 'cross']
@@ -309,29 +322,29 @@ def attention_racetrack_phase(duration=60):
         elif shape_type == 'diamond':
             racer = visual.Rect(win, width=RACER_SIZE, height=RACER_SIZE, ori=45, fillColor=RACER_COLOR)
         elif shape_type == 'cross':
-            # 使用ShapeStim自定义十字形
-            cross_vertices = [(-0.02, -RACER_SIZE / 2), (0.02, -RACER_SIZE / 2), (0.02, -0.02), (RACER_SIZE / 2, -0.02),
-                              (RACER_SIZE / 2, 0.02), (0.02, 0.02), (0.02, RACER_SIZE / 2), (-0.02, RACER_SIZE / 2),
-                              (-0.02, 0.02), (-RACER_SIZE / 2, 0.02), (-RACER_SIZE / 2, -0.02), (-0.02, -0.02)]
+            # 使用ShapeStim自定义十字形 (调整尺寸)
+            cross_vertices = [(-0.015, -RACER_SIZE / 2), (0.015, -RACER_SIZE / 2), (0.015, -0.015), (RACER_SIZE / 2, -0.015),
+                              (RACER_SIZE / 2, 0.015), (0.015, 0.015), (0.015, RACER_SIZE / 2), (-0.015, RACER_SIZE / 2),
+                              (-0.015, 0.015), (-RACER_SIZE / 2, 0.015), (-RACER_SIZE / 2, -0.015), (-0.015, -0.015)]
             racer = visual.ShapeStim(win, vertices=cross_vertices, fillColor=RACER_COLOR, lineColor=RACER_COLOR)
 
         # 设置通用属性并添加到列表
-        racer.pos = (waypoints[0][0] + random.uniform(-0.05, 0.05), waypoints[0][1] + random.uniform(-0.05, 0.05))
+        racer.pos = (waypoints[0][0] + random.uniform(-0.03, 0.03), waypoints[0][1] + random.uniform(-0.03, 0.03))  # 减小初始位置偏移
         racers.append(racer)
 
-        # 初始化速度和状态（与之前逻辑相同）
-        racer_speeds.append(random.uniform(BASE_SPEED * 0.95, BASE_SPEED * 1.05))
+        # 初始化速度和状态（降低速度变化范围）
+        racer_speeds.append(random.uniform(BASE_SPEED * 0.9, BASE_SPEED * 1.1))  # 从0.95-1.05改为0.9-1.1，但基础速度更低
         racer_target_waypoints.append(1)
         racer_states.append('normal')
-        racer_state_timers.append(random.uniform(2, 5))
+        racer_state_timers.append(random.uniform(3, 6))  # 增加状态变化间隔，从2-5改为3-6
 
-    # --- 4. 动画主循环 (无需改动) ---
+    # --- 4. 动画主循环 (调整速度倍数) ---
     # 动画逻辑本身不关心刺激是什么形状，只关心它的 .pos 属性，所以这部分完全兼容
     main_clock = core.Clock();
     dt_clock = core.Clock()
-    SPEED_MULTIPLIERS = {'boost': 1.5, 'normal': 1.0, 'lag': 0.6}
-    STATE_CHANGE_INTERVAL = (2, 5);
-    BOOST_CHANCE = 0.25;
+    SPEED_MULTIPLIERS = {'boost': 1.3, 'normal': 1.0, 'lag': 0.7}  # 降低boost倍数，从1.5改为1.3
+    STATE_CHANGE_INTERVAL = (3, 6);  # 增加状态变化间隔
+    BOOST_CHANCE = 0.2;  # 降低boost概率，从0.25改为0.2
     LAG_CHANCE = 0.15
     while main_clock.getTime() < duration:
         if event.getKeys(keyList=['escape']): win.close(); core.quit()
@@ -355,13 +368,13 @@ def attention_racetrack_phase(duration=60):
             target_waypoint_index = racer_target_waypoints[i];
             target_pos = waypoints[target_waypoint_index]
             distance_to_target = np.linalg.norm(np.array(racers[i].pos) - np.array(target_pos))
-            if distance_to_target < 0.1:
+            if distance_to_target < 0.08:  # 减小到达判定距离，从0.1改为0.08
                 racer_target_waypoints[i] = (target_waypoint_index + 1) % (len(waypoints) - 1);
                 target_pos = waypoints[racer_target_waypoints[i]]
             direction = np.array(target_pos) - np.array(racers[i].pos);
             norm_direction = direction / np.linalg.norm(direction)
             perp_direction = np.array([-norm_direction[1], norm_direction[0]]);
-            wobble = np.sin(main_clock.getTime() * 5 + i * np.pi) * 0.2
+            wobble = np.sin(main_clock.getTime() * 3 + i * np.pi) * 0.15  # 降低摆动幅度和频率，从5改为3，0.2改为0.15
             final_direction = norm_direction + perp_direction * wobble
             state_multiplier = SPEED_MULTIPLIERS[racer_states[i]];
             current_speed = racer_speeds[i] * state_multiplier
@@ -433,175 +446,202 @@ def attention_oddball_phase(duration=60):
     core.wait(3)
 
 
-# ==============================================================================
-# SECTION 2: PYGAME 游戏阶段函数 (已更新HP系统)
-# ==============================================================================
-# ==============================================================================
-# SECTION 2: PYGAME 游戏阶段函数 (固定窗口 + 高难度版)
-# ==============================================================================
-# ==============================================================================
-# SECTION 2: PYGAME 游戏阶段函数 (横向移动 "弹幕雨" 版)
-# ==============================================================================
 def run_dodge_game_phase(duration=60):
     """
-    运行“飞机躲子弹”游戏阶段。
-    此版本为横向移动的 "垂直弹幕雨" 玩法。
+    使用 Pygame 实现的“飞机躲子弹”游戏阶段。
+    - 全屏黑色背景
+    - 中央 GAME_WIDTH x GAME_HEIGHT 的游戏区域
+    - 鼠标左/右键或键盘 ←/→ / A/D 控制左右移动
+    - ESC 退出
     """
-    print("正在启动 Pygame 游戏阶段 (横向移动模式)...")
+    print("正在启动 Pygame 游戏阶段 (鼠标+键盘控制)...")
 
     pygame.init()
 
-    # --- 窗口设置 ---
-    SCREEN_WIDTH = 1200
-    SCREEN_HEIGHT = 800
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    # 屏幕尺寸与游戏区域
+    screen_info = pygame.display.Info()
+    FULL_W, FULL_H = screen_info.current_w, screen_info.current_h
+    GAME_W, GAME_H = 500, 400
+    OFF_X = (FULL_W - GAME_W) // 2  - 300
+    OFF_Y = (FULL_H - GAME_H) // 2 -100
 
-    # --- 难度与玩法设置 (为新模式调整) ---
-    PLAYER_HP = 50  # 初始HP
-    WAVE_SPAWN_RATE = 300  # 每隔多少毫秒生成一波子弹 (数值越小越难)
-    BULLETS_PER_WAVE_MIN = 5  # 每波最少生成几颗子弹
-    BULLETS_PER_WAVE_MAX = 10  # 每波最多生成几颗子弹
-    BULLET_MIN_SPEED = 4  # 子弹最慢下落速度
-    BULLET_MAX_SPEED = 8  # 子弹最快下落速度
-
-    pygame.display.set_caption("飞机躲子弹 (横向移动)")
+    # 全屏窗口
+    screen = pygame.display.set_mode((FULL_W, FULL_H), pygame.FULLSCREEN)
+    pygame.display.set_caption("飞机躲子弹 (Pygame)")
     clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 50)
 
-    # --- 颜色定义 ---
+    # 强制置前（Windows）
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = pygame.display.get_wm_info()['window']
+            SW_RESTORE = 9
+            user32.ShowWindow(hwnd, SW_RESTORE)
+            HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
+            SWP_NOMOVE, SWP_NOSIZE = 0x0002, 0x0001
+            user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+            user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+            user32.SetForegroundWindow(hwnd)
+        except Exception as e:
+            print(f"置顶失败: {e}")
+
+    # 颜色
     BLACK = (0, 0, 0)
     WHITE = (255, 255, 255)
     RED = (255, 0, 0)
     BLUE = (100, 149, 237)
     GREEN = (0, 255, 0)
 
-    # --- 玩家 (飞机) 类 ---
+    # 游戏区域画布
+    game_surface = pygame.Surface((GAME_W, GAME_H))
+
+    # 玩家
     class Player(pygame.sprite.Sprite):
         def __init__(self):
             super().__init__()
-            self.image = pygame.Surface([40, 30])  # 飞机可以改成横向的，更直观
+            self.image = pygame.Surface((28, 20))
             self.image.fill(BLUE)
             self.rect = self.image.get_rect()
-            self.rect.centerx = SCREEN_WIDTH // 2
-            self.rect.bottom = SCREEN_HEIGHT - 30  # 固定在底部
-            self.speed = 8  # 提高横向移速
-            self.hp = PLAYER_HP
+            self.rect.centerx = GAME_W // 2
+            self.rect.bottom = GAME_H - 20
+            self.speed = 8
+            self.hp = 50
             self.invincible = False
-            self.invincible_timer = 0
-            self.invincible_duration = 1000
+            self.inv_start = 0
+            self.inv_ms = 1000
 
         def update(self):
-            if self.invincible and pygame.time.get_ticks() - self.invincible_timer > self.invincible_duration:
+            # 解除无敌
+            if self.invincible and pygame.time.get_ticks() - self.inv_start > self.inv_ms:
                 self.invincible = False
                 self.image.set_alpha(255)
 
-            # --- 核心修改: 只响应左右移动 ---
+            # 输入
+            mouse_buttons = pygame.mouse.get_pressed()
             keys = pygame.key.get_pressed()
-            if keys[pygame.K_LEFT]:
-                self.rect.x -= self.speed
-            if keys[pygame.K_RIGHT]:
-                self.rect.x += self.speed
-            # (上下移动的逻辑已被移除)
+            move = 0
+            if mouse_buttons[0] or keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                move -= 1
+            if mouse_buttons[2] or keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                move += 1
+            self.rect.x += move * self.speed
 
-            # 限制飞机在屏幕左右边界内
+            # 边界
             if self.rect.left < 0:
                 self.rect.left = 0
-            if self.rect.right > SCREEN_WIDTH:
-                self.rect.right = SCREEN_WIDTH
+            if self.rect.right > GAME_W:
+                self.rect.right = GAME_W
 
         def get_hit(self):
             if not self.invincible:
                 self.hp -= 1
                 self.invincible = True
-                self.invincible_timer = pygame.time.get_ticks()
+                self.inv_start = pygame.time.get_ticks()
                 self.image.set_alpha(128)
 
-    # --- 子弹类 ---
+    # 子弹
     class Bullet(pygame.sprite.Sprite):
         def __init__(self):
             super().__init__()
-            self.image = pygame.Surface([5, 20])  # 子弹可以做成细长条，更像雨滴
+            self.image = pygame.Surface((3, 12))
             self.image.fill(RED)
             self.rect = self.image.get_rect()
-
-            # --- 核心修改: 子弹只在顶部生成，并垂直下落 ---
-            # 随机在屏幕顶部生成
-            self.rect.x = random.randrange(SCREEN_WIDTH)
-            self.rect.y = random.randrange(-100, -self.rect.height)  # 在屏幕外一点生成，避免突然出现
-
-            # 速度只有垂直分量
-            self.vel_x = 0
-            self.vel_y = random.uniform(BULLET_MIN_SPEED, BULLET_MAX_SPEED)
-
+            self.rect.x = random.randrange(GAME_W)
+            self.rect.y = random.randrange(-60, -self.rect.height)
+            self.vy = random.uniform(2.0, 5.0)
         def update(self):
-            self.rect.y += self.vel_y
-            # 如果子弹落出屏幕底部，就销毁它
-            if self.rect.top > SCREEN_HEIGHT:
+            self.rect.y += self.vy
+            if self.rect.top > GAME_H:
                 self.kill()
 
-    # --- 游戏循环准备 ---
+    # 组
     all_sprites = pygame.sprite.Group()
     bullets = pygame.sprite.Group()
     player = Player()
     all_sprites.add(player)
 
-    # --- 核心修改: 事件现在是生成一波 (Wave) 子弹 ---
     ADD_WAVE = pygame.USEREVENT + 1
-    pygame.time.set_timer(ADD_WAVE, WAVE_SPAWN_RATE)
+    pygame.time.set_timer(ADD_WAVE, 400)
 
-    start_time = pygame.time.get_ticks()
+    font = pygame.font.Font(None, 28)
+
+    # 初始说明
+    instruction_surface = pygame.Surface((GAME_W, GAME_H))
+    instruction_surface.fill(BLACK)
+    f24 = pygame.font.Font(None, 24)
+    t1 = f24.render("鼠标左键/←/A: 向左", True, WHITE)
+    t2 = f24.render("鼠标右键/→/D: 向右", True, WHITE)
+    t3 = f24.render("ESC: 退出", True, WHITE)
+    instruction_surface.blit(t1, (GAME_W//2 - t1.get_width()//2, GAME_H//2 - 40))
+    instruction_surface.blit(t2, (GAME_W//2 - t2.get_width()//2, GAME_H//2 - 10))
+    instruction_surface.blit(t3, (GAME_W//2 - t3.get_width()//2, GAME_H//2 + 20))
+
+    screen.fill(BLACK)
+    screen.blit(instruction_surface, (OFF_X, OFF_Y))
+    pygame.display.flip()
+    pygame.time.wait(2000)
+
+    start_ms = pygame.time.get_ticks()
     running = True
     game_over = False
     player_won = False
 
     while running:
         clock.tick(60)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
                 running = False
-            # --- 核心修改: 接收到事件后，生成一整波子弹 ---
-            elif event.type == ADD_WAVE and not game_over:
-                num_to_spawn = random.randint(BULLETS_PER_WAVE_MIN, BULLETS_PER_WAVE_MAX)
-                for _ in range(num_to_spawn):
-                    new_bullet = Bullet()
-                    all_sprites.add(new_bullet)
-                    bullets.add(new_bullet)
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                running = False
+            elif e.type == ADD_WAVE and not game_over:
+                n = random.randint(3, 6)
+                for _ in range(n):
+                    b = Bullet()
+                    all_sprites.add(b)
+                    bullets.add(b)
 
         if not game_over:
             all_sprites.update()
-            collided_bullets = pygame.sprite.spritecollide(player, bullets, True)
-            if collided_bullets:
+            # 碰撞
+            for _ in pygame.sprite.spritecollide(player, bullets, True):
                 player.get_hit()
                 if player.hp <= 0:
                     game_over = True
-            elapsed_seconds = (pygame.time.get_ticks() - start_time) / 1000
-            if elapsed_seconds >= duration:
+                    break
+
+            # 时间判定
+            elapsed = (pygame.time.get_ticks() - start_ms) / 1000.0
+            if elapsed >= duration:
                 game_over = True
                 player_won = True
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_ESCAPE]:
-            running = False
-
+        # 画面
         screen.fill(BLACK)
-        all_sprites.draw(screen)
-        remaining_time = max(0, duration - elapsed_seconds)
-        timer_text = font.render(f"Time: {int(remaining_time)}", True, WHITE)
-        screen.blit(timer_text, (10, 10))
-        hp_text = font.render(f"HP: {player.hp}", True, GREEN)
-        screen.blit(hp_text, (10, 50))
+        game_surface.fill(BLACK)
+
+        all_sprites.draw(game_surface)
+
+        # UI
+        remain = 0 if game_over else max(0, int(duration - elapsed))
+        game_surface.blit(font.render(f"Time: {remain}", True, WHITE), (8, 8))
+        game_surface.blit(font.render(f"HP: {player.hp}", True, GREEN), (8, 35))
 
         if game_over:
-            end_text_str = "You Win!" if player_won else "Game Over"
-            end_color = GREEN if player_won else RED
-            end_text = font.render(end_text_str, True, end_color)
-            text_rect = end_text.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
-            screen.blit(end_text, text_rect)
-            pygame.display.flip()
-            pygame.time.wait(3000)
-            running = False
+            msg = "You Win!" if player_won else "Game Over"
+            color = GREEN if player_won else (255, 80, 80)
+            end_text = font.render(msg, True, color)
+            rect = end_text.get_rect(center=(GAME_W//2, GAME_H//2))
+            game_surface.blit(end_text, rect)
 
+        # 边框 & 合成
+        pygame.draw.rect(screen, WHITE, (OFF_X-3, OFF_Y-3, GAME_W+6, GAME_H+6), 3)
+        screen.blit(game_surface, (OFF_X, OFF_Y))
         pygame.display.flip()
+
+        if game_over:
+            pygame.time.wait(2000)
+            running = False
 
     pygame.quit()
     print("Pygame 游戏阶段结束。")
@@ -610,38 +650,35 @@ def run_dodge_game_phase(duration=60):
 # 3. 主实验流程 (更新后)
 # ==============================================================================
 def run_experiment():
+
     """定义整个实验的执行顺序"""
+    ensure_window()
 
-    # 第1阶段：静息
-    # preparation_phase(10)
-    # resting_phase2(60)
-    #
-    # attention_racetrack_phase(60)
+    # 第1阶段：静息/准备
+    preparation_phase(10)
+    resting_phase2(60)
 
-    # attention_cloud_phase(win,60)
-
-    transition_text = visual.TextStim(win, text="下一个任务：躲避游戏\n\n请你通过键盘上的\"左右按键\"躲避敌机", height=0.1)
+    transition_text = visual.TextStim(win, text="下一个任务：躲避游戏\n\n请用鼠标或方向键左右移动", height=0.1)
     transition_text.draw()
     win.flip()
     core.wait(10)
 
-    # --- 核心步骤: 关闭PsychoPy窗口 ---
-    # 在启动Pygame之前，必须释放对屏幕的控制
+    # arithmetic_phase(60)
+
+    # 关闭 PsychoPy 窗口，释放显示控制权
     win.close()
 
-    # --- 阶段 3: 运行Pygame游戏 ---
-    run_dodge_game_phase(duration=60)  # 运行60秒的游戏
+    # 运行 Pygame 游戏
+    run_dodge_game_phase(duration=60)
 
-    # --- 阶段 4: 实验结束 ---
-    # Pygame结束后，可以重新创建一个PsychoPy窗口来显示最终信息
-    final_win = visual.Window(fullscr=True, color=(-0.8, -0.8, -0.8), screen=0, units='norm')
-    end_text = visual.TextStim(final_win, text="实验结束，谢谢参与！", height=0.1)
-    end_text.draw()
-    final_win.flip()
-    core.wait(5)
+    # 重新创建窗口并结束提示
+    # final_win = visual.Window(fullscr=True, color=(-0.8, -0.8, -0.8), screen=0, units='norm')
+    # end_text = visual.TextStim(final_win, text="实验结束，谢谢参与！", height=0.1)
+    # end_text.draw()
+    # final_win.flip()
+    # core.wait(3)
 
-    # --- 清理 ---
-    final_win.close()
+    # final_win.close()
     core.quit()
 
 

@@ -1,93 +1,419 @@
-/* 日期选择器样式 */
-.date-scroll {
-  white-space: nowrap;
+/* pages/history/history.wxss */
+.container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40rpx;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="200" height="200" fill="url(%23dots)"/></svg>');
+  pointer-events: none;
+}
+
+/* 页面标题 */
+.page-header {
+  text-align: center;
+  margin-bottom: 50rpx;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 16rpx;
+  text-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.3);
+}
+
+.subtitle {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+}
+
+/* 内容区域 */
+.content-section {
+  position: relative;
+  z-index: 1;
+}
+
+/* 区块标题 */
+.section-header {
+  margin-bottom: 30rpx;
+  padding: 0 10rpx;
+}
+
+.section-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12rpx;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
+}
+
+.section-desc {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+/* 日期网格 */
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280rpx, 1fr));
+  gap: 24rpx;
+  margin-bottom: 50rpx;
+}
+
+.date-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20rpx;
+  padding: 32rpx;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+  border: 2rpx solid transparent;
+}
+
+.date-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
   width: 100%;
-  padding: 10px 0;
-  background-color: #f7f7f7;
-  border-bottom: 1px solid #eee;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s;
 }
 
-.date-item {
-  display: inline-block;
-  padding: 5px 15px;
-  margin: 0 5px;
-  border-radius: 15px;
-  font-size: 14px;
+.date-card:hover::before {
+  left: 100%;
+}
+
+.date-card:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.15);
+}
+
+.date-card.selected {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.02);
+  box-shadow: 0 12rpx 32rpx rgba(79, 172, 254, 0.4);
+}
+
+.date-icon {
+  font-size: 48rpx;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.date-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12rpx;
+}
+
+.date-card.selected .date-text {
+  color: white;
+}
+
+.date-badge {
+  font-size: 24rpx;
   color: #666;
-  background-color: #fff;
-  border: 1px solid #ddd;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  display: inline-block;
 }
 
-.date-item.active {
-  color: #1aad19;
-  border-color: #1aad19;
-  font-weight: bold;
+.date-card.selected .date-badge {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.2);
 }
 
-/* 加载指示器样式 */
-.loading-mask {
+/* 文件网格 */
+.file-grid {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 24rpx;
+  backdrop-filter: blur(20rpx);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  margin-bottom: 40rpx;
+}
+
+.file-scroll {
+  max-height: 600rpx;
+  padding: 20rpx;
+}
+
+.file-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.file-card:last-child {
+  margin-bottom: 0;
+}
+
+.file-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4rpx;
+  height: 100%;
+  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.file-card:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+}
+
+.file-card:active::before {
+  transform: scaleY(1);
+}
+
+.file-icon {
+  font-size: 48rpx;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8rpx;
+  word-break: break-all;
+}
+
+.file-time,
+.file-size {
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 4rpx;
+}
+
+.file-arrow {
+  font-size: 32rpx;
+  color: #ccc;
+  margin-left: 16rpx;
+  transition: all 0.3s ease;
+}
+
+.file-card:active .file-arrow {
+  color: #4facfe;
+  transform: translateX(4rpx);
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 80rpx 40rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 24rpx;
+  backdrop-filter: blur(15rpx);
+  border: 2rpx dashed rgba(255, 255, 255, 0.3);
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 16rpx;
+}
+
+.empty-desc {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+}
+
+/* 图表区域 */
+.chart-section {
+  position: relative;
+  z-index: 1;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.chart-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  padding: 16rpx 32rpx;
+  border-radius: 50rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.1);
+}
+
+.back-btn:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+}
+
+.chart-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 40rpx;
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20rpx);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 400rpx;
+  border-radius: 12rpx;
+}
+
+.chart-controls {
+  display: flex;
+  gap: 24rpx;
+}
+
+.control-btn {
+  flex: 1;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: none;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.control-btn.export {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  box-shadow: 0 8rpx 24rpx rgba(79, 172, 254, 0.4);
+}
+
+.control-btn.share {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.4);
+}
+
+.control-btn:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+}
+
+/* 加载状态 */
+.loading-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0,0,0,0.3);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  z-index: 999;
+  z-index: 1000;
+  backdrop-filter: blur(10rpx);
 }
 
-.loading-content {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  text-align: center;
+.loading-spinner {
+  width: 80rpx;
+  height: 80rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.3);
+  border-top: 6rpx solid #4facfe;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 30rpx;
 }
 
-.loading-content image {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 10px;
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-.loading-content text {
-  display: block;
-  font-size: 14px;
-  color: #666;
+.loading-text {
+  font-size: 32rpx;
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
 }
 
-/* 文件列表样式 */
-.file-list {
-  margin: 10px;
-  border: 1px solid #eee;
-  border-radius: 5px;
-}
+/* 响应式适配 */
+@media (max-width: 375px) {
+  .container {
+    padding: 30rpx;
+  }
 
-.file-item {
-  padding: 12px 15px;
-  border-bottom: 1px solid #f5f5f5;
-  display: flex;
-  align-items: center;
-}
+  .date-grid {
+    grid-template-columns: 1fr;
+  }
 
-.file-name {
-  white-space: nowrap;       /* 不换行 */
-  overflow: hidden;          /* 超出部分隐藏 */
-  text-overflow: ellipsis;   /* 显示省略号 */
-  flex: 1;                  /* 占据剩余空间 */
-}
+  .chart-controls {
+    flex-direction: column;
+  }
 
-/* 确保 chart 容器没有限制高度 */
-.chart-container {
-  width: 100%;
-  height: 70vh; /* 或直接固定高度，如 height: 500px; */
-  margin: 10px 0;
-}
+  .chart-header {
+    flex-direction: column;
+    gap: 20rpx;
+    align-items: stretch;
+  }
 
-/* canvas 元素本身要撑满父容器 */
-canvas {
-  width: 100%;
-  height: 100%;
-  display: block; /* 避免默认的 inline 元素间隙 */
+  .title {
+    font-size: 40rpx;
+  }
 }
