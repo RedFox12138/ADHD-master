@@ -146,6 +146,9 @@ def process_data():
                         f.write(f"{session['Base_value']}\n")
                         f.flush()
                     session['Base_flag'] = True
+                with open(delta_file, 'a') as f:
+                    f.write(f"{tbr}\n")
+                    f.flush()
 
                 tbr_list.append(tbr)
 

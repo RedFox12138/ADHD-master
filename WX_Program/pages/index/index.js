@@ -333,6 +333,7 @@ Page({
       const dataToSend = receivedData.slice(0, batch_len);
       receivedData = receivedData.slice(batch_len);
 
+      
       wx.request({
         url: 'http://xxyeeg.zicp.fun/process', 
         method: 'POST',
