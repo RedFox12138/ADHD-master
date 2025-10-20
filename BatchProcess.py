@@ -23,7 +23,7 @@ def process_txt_file(txt_path, output_folder, fs=250):
     processed_signal,_ = preprocess3(data, fs)
     # processed_signal, _ = preprocess3_fir(data, fs,True)
 
-    processed_signal = eog_removal(processed_signal, 250, True)
+    # processed_signal = eog_removal(processed_signal, 250, True)
     # processed_signal = eog_removal_vmd(processed_signal)
     # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
 

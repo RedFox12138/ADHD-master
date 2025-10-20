@@ -1,0 +1,14 @@
+<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg">
+  <!-- 怪物身体 -->
+  <ellipse cx="30" cy="35" rx="20" ry="15" fill="#4B0082"/>
+  <!-- 怪物头部 -->
+  <circle cx="30" cy="20" r="15" fill="#8A2BE2"/>
+  <!-- 眼睛 -->
+  <circle cx="25" cy="18" r="3" fill="#FF0000"/>
+  <circle cx="35" cy="18" r="3" fill="#FF0000"/>
+  <!-- 嘴巴 -->
+  <path d="M 22 25 Q 30 30 38 25" stroke="#FF0000" stroke-width="2" fill="none"/>
+  <!-- 触手/爪子 -->
+  <path d="M 15 40 Q 10 45 12 50" stroke="#4B0082" stroke-width="3" fill="none"/>
+  <path d="M 45 40 Q 50 45 48 50" stroke="#4B0082" stroke-width="3" fill="none"/>
+</svg>

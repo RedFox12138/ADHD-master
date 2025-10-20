@@ -1,0 +1,98 @@
+<!--pages/gameRecords/gameRecords.wxml-->
+<view class="container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <view class="title">📊 训练成长记录</view>
+    <view class="subtitle">追踪你的注意力训练进步</view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading-overlay" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <view class="loading-text">加载中...</view>
+  </view>
+
+  <!-- 有记录时显示 -->
+  <view class="content-section" wx:if="{{hasRecords && !loading}}">
+    <!-- 统计卡片 -->
+    <view class="stats-cards">
+      <view class="stat-card">
+        <view class="stat-icon">🎮</view>
+        <view class="stat-value">{{totalGames}}</view>
+        <view class="stat-label">总训练次数</view>
+      </view>
+      
+      <view class="stat-card">
+        <view class="stat-icon">⏱️</view>
+        <view class="stat-value">{{avgTime}}秒</view>
+        <view class="stat-label">平均时长</view>
+      </view>
+      
+      <view class="stat-card">
+        <view class="stat-icon">🏆</view>
+        <view class="stat-value">{{maxTime}}秒</view>
+        <view class="stat-label">最长记录</view>
+      </view>
+      
+      <view class="stat-card">
+        <view class="stat-icon">
+          {{trend === 'up' ? '📈' : trend === 'down' ? '📉' : '➡️'}}
+        </view>
+        <view class="stat-value">
+          {{trend === 'up' ? '上升' : trend === 'down' ? '下降' : '稳定'}}
+        </view>
+        <view class="stat-label">训练趋势</view>
+      </view>
+    </view>
+
+    <!-- 趋势图表 -->
+    <view class="chart-section">
+      <view class="section-header">
+        <view class="section-title">📈 时长趋势图</view>
+        <view class="section-desc">显示最近20次训练</view>
+      </view>
+      
+      <view class="chart-container">
+        <canvas canvas-id="gameRecordsChart" class="chart-canvas"></canvas>
+      </view>
+    </view>
+
+    <!-- 记录列表 -->
+    <view class="records-section">
+      <view class="section-header">
+        <view class="section-title">📋 历史记录</view>
+        <view class="section-desc">点击查看详情</view>
+      </view>
+
+      <view class="records-list">
+        <scroll-view scroll-y class="records-scroll">
+          <view wx:for="{{records}}" 
+                wx:key="index"
+                class="record-item"
+                bindtap="viewDetail"
+                data-index="{{index}}">
+            <view class="record-number">第{{index + 1}}次</view>
+            <view class="record-info">
+              <view class="record-time">{{item.timestamp}}</view>
+              <view class="record-duration">时长: {{item.gameTime}}秒</view>
+            </view>
+            <view class="record-arrow">➤</view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 刷新按钮 -->
+    <view class="refresh-btn" bindtap="onRefresh">
+      <text>🔄 刷新数据</text>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!hasRecords && !loading}}">
+    <view class="empty-icon">🎯</view>
+    <view class="empty-title">暂无训练记录</view>
+    <view class="empty-desc">开始你的第一次注意力训练吧！</view>
+    <button class="start-btn" bindtap="goToGame">开始训练</button>
+  </view>
+</view>

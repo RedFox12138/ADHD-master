@@ -2,7 +2,11 @@
   <!-- 连接状态显示 -->
   <view class="status-card">
     <view class="status">
-      连接状态：{{connected ? '已连接 ' + deviceName : '未连接'}}
+      设备状态：{{connected ? '已连接 ' + deviceName : '未连接'}}
+    </view>
+    <view class="status {{socketConnected ? 'status-online' : 'status-offline'}}">
+      服务器：{{socketConnected ? '已连接 ✓' : (isReconnecting ? '重连中...' : '未连接 ✗')}}
+      {{isReconnecting ? '(第' + reconnectAttempts + '次)' : ''}}
     </view>
   </view>
   
@@ -20,61 +24,137 @@
     <view>⚡ 样本熵：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
   </view>
 
-  <view class="game-container" wx:if="{{experimentStarted && (currentPhase === '治疗阶段' || currentPhase === '基准阶段')}}">
-  <!-- 当前场景背景 -->
-  <image 
-    src="{{scenes[currentScene].image}}" 
-    class="scene-background" 
-    style="opacity: {{1 - sceneTransitionProgress}}"
-    mode="aspectFill"
-  />
-  
-  <!-- 下一个场景背景（过渡用） -->
-  <image 
-    src="{{scenes[nextScene] ? scenes[nextScene].image : ''}}" 
-    class="scene-background" 
-    style="opacity: {{sceneTransitionProgress}}"
-    mode="aspectFill"
-    wx:if="{{nextScene}}"
-  />
-    
-  <view class="bird-container" style="top: {{birdY}}%">
+  <!-- 基线收集阶段 -->
+  <view class="baseline-container" wx:if="{{currentPhase === '基准阶段'}}">
+    <view class="baseline-title">请保持放松，小镇正在生成</view>
+    <view class="progress-container">
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{(30-remainingTime)/30*100}}%"></view>
+      </view>
+      <view class="progress-text">{{Math.floor((30-remainingTime)/30*100)}}%</view>
+    </view>
+    <view class="baseline-time">剩余时间：{{remainingTime}}秒</view>
+  </view>
 
-  <!-- 小鸟图片 -->
-  <image 
-    src="/images/bird.gif" 
-    class="bird-image"
-    mode="widthFix"
-  />
-</view>
+  <!-- 保卫小镇游戏界面 -->
+  <view class="game-container" wx:if="{{currentPhase === '治疗阶段'}}"
+        catchtouchmove="preventPageScroll"
+        bindtouchstart="onMapTouchStart"
+        bindtouchmove="onMapTouchMove"
+        bindtouchend="onMapTouchEnd">
     
-    <!-- 游戏状态 -->
+    <!-- 游戏世界容器（可拖动） -->
+    <view class="game-world" style="transform: translate({{mapOffsetX}}px, {{mapOffsetY}}px);">
+      <!-- 小镇（中心位置） -->
+      <view class="town" style="left: {{town.x}}rpx; top: {{town.y}}rpx;">
+        <view class="town-body">🏰</view>
+        <!-- 小镇血条 -->
+        <view class="health-bar town-health">
+          <view class="health-fill" style="width: {{town.hp/town.maxHp*100}}%"></view>
+          <text class="health-text">{{town.hp}}/{{town.maxHp}}</text>
+        </view>
+      </view>
+
+      <!-- 炮台 -->
+      <view wx:for="{{turrets}}" wx:key="id" class="turret" 
+            style="left: {{item.x}}rpx; top: {{item.y}}rpx; transform: translate(-50%, -50%) rotate({{item.rotation}}deg);">
+        <view class="turret-body">🔫</view>
+      </view>
+
+      <!-- 怪物 -->
+      <view wx:for="{{monsters}}" wx:key="id" class="monster {{item.isBoss ? 'boss-monster' : ''}}" 
+            style="left: {{item.x}}rpx; top: {{item.y}}rpx;">
+        <view class="monster-body {{item.isBoss ? 'boss-body' : ''}}">{{item.isBoss ? '👹' : '👾'}}</view>
+        <!-- 怪物血条 -->
+        <view class="health-bar monster-health" wx:if="{{item.maxHp > 1}}">
+          <view class="health-fill monster-fill" style="width: {{item.hp/item.maxHp*100}}%"></view>
+        </view>
+        <!-- Boss标记 -->
+        <view wx:if="{{item.isBoss}}" class="boss-label">BOSS</view>
+      </view>
+
+      <!-- 子弹 -->
+      <view wx:for="{{bullets}}" wx:key="id" class="bullet" 
+            style="left: {{item.x}}rpx; top: {{item.y}}rpx;">
+        <view class="bullet-body">💥</view>
+      </view>
+
+      <!-- 爆炸效果 -->
+      <view wx:for="{{explosions}}" wx:key="id" class="explosion" 
+            style="left: {{item.x}}rpx; top: {{item.y}}rpx;">
+        <view class="explosion-body">💢</view>
+      </view>
+    </view>
+
+    <!-- 游戏状态面板 -->
     <view class="game-stats">
-      <view class="stat-item">
-        <view class="icon-time"></view>
-        <text>{{remainingTime}}s</text>
+      <view class="stat-row">
+        <view class="stat-item">
+          <text class="stat-label">存活</text>
+          <text class="stat-value">{{survivedTime}}s</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">等级</text>
+          <text class="stat-value">{{playerLevel}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">波次</text>
+          <text class="stat-value">{{currentWave}}</text>
+        </view>
       </view>
-      <!-- <view class="stat-item">
-        <view class="icon-attention"></view>
-        <text>{{currentAttention}}%</text>
-      </view> -->
-      <view class="stat-item">
-        <view class="icon-scene"></view>
-        <text>Lv.{{scenes[currentScene].level}}</text>
+      <view class="stat-row">
+        <view class="stat-item">
+          <text class="stat-label">基准</text>
+          <text class="stat-value">{{baselineValue || '--'}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">当前</text>
+          <text class="stat-value">{{currentAttention || '--'}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">击败</text>
+          <text class="stat-value">{{defeatedMonsters}}</text>
+        </view>
       </view>
+      <view class="stat-row">
+        <view class="stat-item-full">
+          <text class="stat-label">经验</text>
+          <text class="stat-value">{{experience}}/{{nextLevelExp}}</text>
+        </view>
+      </view>
+      <view class="exp-bar">
+        <view class="exp-fill" style="width: {{experience/nextLevelExp*100}}%"></view>
+      </view>
+    </view>
+
+    <!-- 结束游戏按钮 -->
+    <view class="end-game-btn" bindtap="endGameManually">
+      <text>结束游戏</text>
+    </view>
+
+    <!-- 游戏开始提示 -->
+    <view class="game-prompt" wx:if="{{showGamePrompt}}">
+      <text class="prompt-text">请集中注意力，保卫小镇！</text>
     </view>
     
     <!-- 游戏结束界面 -->
     <view class="game-over" wx:if="{{gameOver}}">
-      <view class="game-over-title">训练完成</view>
-      <view class="game-over-level">最终等级: {{scenes[currentScene].level}}</view>
-      <button class="restart-btn" bindtap="restartExperiment">重新开始</button>
+      <view class="game-over-content">
+        <view class="game-over-title">小镇沦陷</view>
+        <view class="game-over-stats">
+          <view>存活时间: {{survivedTime}}秒</view>
+          <view>最终等级: {{playerLevel}}</view>
+          <view>击败怪物: {{defeatedMonsters}}</view>
+          <view>到达波次: {{currentWave}}</view>
+        </view>
+        <button class="restart-btn" bindtap="restartExperiment">重新开始</button>
+      </view>
     </view>
   </view>
   
   
   <!-- 实验信息 -->
-  <view class="experiment-info" wx:if="{{experimentStarted}}">
+  <view class="experiment-info" wx:if="{{experimentStarted && currentPhase !== '治疗阶段'}}">
     <view wx:if="{{currentPhase === '准备阶段'}}">
       <text>🎯 准备中：{{remainingTime}}秒后开始基准测试</text>
     </view>
@@ -86,31 +166,28 @@
   
   <!-- 控制按钮区域 -->
   <view class="control-panel">
-    <!-- 数据发送区域 -->
-    <view class="input-section">
-      <input
-        class="data-input"
-        placeholder="请输入十六进制数据（如：A1B2C3）"
-        bindinput="handleInput"
-        value="{{inputData}}"
-      />
-      <button class="control-btn send-btn" bindtap="sendData">
-        📤 发送数据
-      </button>
-    </view>
-
     <!-- 主要操作按钮 -->
     <view class="main-actions">
       <button class="control-btn primary" bindtap="navigateToScan">
-        {{connected ? '🔄 重新连接' : '🔍 搜索设备'}}
+        {{connected ? '🔄 重新连接' : '� 搜索设备'}}
+      </button>
+      
+      <!-- 数据发送切换按钮 -->
+      <button 
+        class="control-btn {{isDataSending ? 'danger' : 'success'}}" 
+        bindtap="toggleDataSending"
+        wx:if="{{connected}}"
+      >
+        {{isDataSending ? '⏹️ 停止发送' : '▶️ 发送数据'}}
       </button>
 
       <button
         class="control-btn success"
         bindtap="startExperiment"
         wx:if="{{!experimentStarted && connected}}"
+        disabled="{{!socketConnected}}"
       >
-        🚀 开始实验
+        {{socketConnected ? '🚀 开始实验' : '⏳ 等待服务器连接...'}}
       </button>
 
       <button

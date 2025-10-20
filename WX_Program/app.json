@@ -5,7 +5,7 @@
     "pages/history/history"
   ],
   "window": {
-    "navigationBarTitleText": "BLE数据监控"
+    "navigationBarTitleText": "保卫小镇 - ADHD注意力训练"
   },
   "useExtendedLib": {
     "weui": true

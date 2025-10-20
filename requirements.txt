@@ -1,6 +1,9 @@
 EMD_signal==1.6.4
 EntropyHub==2.0
 Flask==2.0.2
+flask-sock==0.7.0
+simple-websocket==1.0.0
+dnspython==2.3.0
 matplotlib==3.8.4
 numpy==1.25.2
 psychopy==2025.1.1
@@ -10,3 +13,4 @@ Requests==2.32.3
 scipy==1.6.2
 vmdpy==0.2
 numba==0.58.1
+

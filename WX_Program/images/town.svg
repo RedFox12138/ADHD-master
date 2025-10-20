@@ -1,0 +1,13 @@
+<svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
+  <!-- 小镇建筑主体 -->
+  <rect x="20" y="30" width="40" height="35" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+  <!-- 屋顶 -->
+  <polygon points="15,30 40,15 65,30" fill="#DC143C" stroke="#B22222" stroke-width="2"/>
+  <!-- 门 -->
+  <rect x="35" y="50" width="10" height="15" fill="#4A4A4A"/>
+  <!-- 窗户 -->
+  <rect x="25" y="40" width="8" height="8" fill="#87CEEB" stroke="#4682B4" stroke-width="1"/>
+  <rect x="47" y="40" width="8" height="8" fill="#87CEEB" stroke="#4682B4" stroke-width="1"/>
+  <!-- 烟囱 -->
+  <rect x="50" y="10" width="6" height="20" fill="#696969"/>
+</svg>

@@ -6,12 +6,85 @@
     <view class="subtitle">查看您的ADHD检测历史记录</view>
   </view>
 
+  <!-- 数据类型切换 -->
+  <view class="type-switch" wx:if="{{!showChart}}">
+    <button 
+      class="type-btn {{dataType === 'feature' ? 'active' : ''}}"
+      bindtap="switchDataType"
+      data-type="feature">
+      📈 特征数据
+    </button>
+    <button 
+      class="type-btn {{dataType === 'gameRecords' ? 'active' : ''}}"
+      bindtap="switchDataType"
+      data-type="gameRecords">
+      🎮 训练记录
+    </button>
+  </view>
+
+  <!-- 游戏记录视图 -->
+  <view class="game-records-section" wx:if="{{dataType === 'gameRecords' && showChart}}">
+    <!-- 统计卡片 -->
+    <view class="stats-grid">
+      <view class="stat-card">
+        <view class="stat-icon">🎮</view>
+        <view class="stat-value">{{totalGames}}</view>
+        <view class="stat-label">训练次数</view>
+      </view>
+
+      <view class="stat-card">
+        <view class="stat-icon">⏱️</view>
+        <view class="stat-value">{{avgTime}}秒</view>
+        <view class="stat-label">平均时长</view>
+      </view>
+
+      <view class="stat-card">
+        <view class="stat-icon">🏆</view>
+        <view class="stat-value">{{maxTime}}秒</view>
+        <view class="stat-label">最佳记录</view>
+      </view>
+
+      <view class="stat-card trend-{{trend}}">
+        <view class="stat-icon">
+          {{trend === 'improving' ? '📈' : trend === 'declining' ? '📉' : '➡️'}}
+        </view>
+        <view class="stat-value">
+          {{trend === 'improving' ? '进步中' : trend === 'declining' ? '需加油' : trend === 'insufficient' ? '数据不足' : '稳定'}}
+        </view>
+        <view class="stat-label">趋势分析</view>
+      </view>
+    </view>
+
+    <!-- 智能建议卡片 -->
+    <view wx:if="{{suggestion}}" class="suggestion-card">
+      <view class="suggestion-header">
+        <text class="suggestion-icon">💡</text>
+        <text class="suggestion-title">智能分析与建议</text>
+      </view>
+      <view class="suggestion-content">{{suggestion}}</view>
+    </view>
+
+    <!-- 图表 -->
+    <view class="chart-header">
+      <view class="chart-title">📈 训练时长趋势</view>
+      <button class="back-btn" bindtap="switchDataType" data-type="feature">← 返回</button>
+    </view>
+
+    <view class="chart-container">
+      <canvas canvas-id="historyChart" class="chart-canvas"></canvas>
+    </view>
+
+    <view class="chart-tip">
+      <text>💡 双指捏合缩放，单指拖动平移查看详情</text>
+    </view>
+  </view>
+
   <!-- 日期选择 -->
-  <view wx:if="{{!showChart}}" class="content-section">
+  <view wx:if="{{!showChart && dataType !== 'gameRecords'}}" class="content-section">
     <!-- 日期列表 -->
     <view class="section-header">
       <view class="section-title">📅 选择日期</view>
-      <view class="section-desc">点击日期查看当天的检测记录</view>
+      <view class="section-desc">点击日期查看{{dataType === 'feature' ? '特征数据' : '原始信号'}}记录</view>
     </view>
 
     <view class="date-grid">
@@ -28,8 +101,8 @@
 
     <!-- 文件列表 -->
     <view class="section-header" wx:if="{{selectedDate}}">
-      <view class="section-title">📁 检测文件</view>
-      <view class="section-desc">选择要查看的具体检测文件</view>
+      <view class="section-title">📁 {{dataType === 'feature' ? '特征文件' : '原始信号文件'}}</view>
+      <view class="section-desc">选择要查看的具体文件</view>
     </view>
 
     <view class="file-grid" wx:if="{{selectedDate && historyFiles.length}}">
@@ -42,8 +115,7 @@
           <view class="file-icon">📄</view>
           <view class="file-info">
             <view class="file-name">{{item.name}}</view>
-            <view class="file-time">{{item.time || '检测时间未知'}}</view>
-            <view class="file-size">{{item.size || '大小未知'}}</view>
+            <view class="file-time">{{item.time || '时间未知'}}</view>
           </view>
           <view class="file-arrow">➤</view>
         </view>
@@ -53,25 +125,34 @@
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{selectedDate && !historyFiles.length}}">
       <view class="empty-icon">📭</view>
-      <view class="empty-title">暂无检测记录</view>
-      <view class="empty-desc">该日期下没有找到检测文件</view>
+      <view class="empty-title">暂无记录</view>
+      <view class="empty-desc">该日期下没有找到文件</view>
     </view>
   </view>
 
-  <!-- 图表视图 -->
-  <view class="chart-section" wx:if="{{showChart}}">
+  <!-- 图表视图 (特征数据和原始信号) -->
+  <view class="chart-section" wx:if="{{showChart && dataType !== 'gameRecords'}}">
     <view class="chart-header">
-      <view class="chart-title">📈 数据可视化</view>
-      <button class="back-btn" bindtap="backToList">← 返回列表</button>
+      <view class="chart-title">
+        📈 {{dataType === 'feature' ? '特征时序图' : '原始信号图'}}
+      </view>
+      <button class="back-btn" bindtap="backToList">← 返回</button>
     </view>
 
-    <view class="chart-container">
+    <!-- 图表信息（简化版） -->
+    <view class="chart-info-simple">
+      <text class="info-text">
+        {{dataType === 'feature' && chartData.baseline ? '基线: ' + chartData.baseline.toFixed(2) + ' | ' : ''}}显示: {{viewStart}}-{{viewStart + viewRange}} / {{chartData.totalPoints}}
+      </text>
+      <text class="gesture-hint">💡 双指捏合缩放，单指拖动平移</text>
+    </view>
+
+    <!-- 图表容器（支持触摸手势） -->
+    <view class="chart-container"
+          bindtouchstart="onChartTouchStart"
+          bindtouchmove="onChartTouchMove"
+          bindtouchend="onChartTouchEnd">
       <canvas canvas-id="historyChart" class="chart-canvas"></canvas>
-    </view>
-
-    <view class="chart-controls">
-      <button class="control-btn export" bindtap="exportData">📤 导出数据</button>
-      <button class="control-btn share" bindtap="shareChart">📱 分享图表</button>
     </view>
   </view>
 
