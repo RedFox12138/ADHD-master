@@ -102,7 +102,11 @@ Page({
     turretAttackTimer: null,
     difficultyTimer: null,
 
-    chartInited: false
+    chartInited: false,
+    
+    // UI控制
+    showDataPanel: false,  // 侧边数据面板显示状态
+    showStartCover: true   // 启动封面显示状态
   },
 
   onLoad: function() {
@@ -535,6 +539,9 @@ Page({
       });
       return;
     }
+    
+    // 隐藏启动封面
+    this.setData({ showStartCover: false });
     
     this.resetChart();
     this.setData({
@@ -1261,13 +1268,6 @@ Page({
       const hexToSend = buf.slice(0, batch_len);
       buf = buf.slice(batch_len); // 删除已发送的部分
       
-      // 只在首次发送或间隔较长时打印日志
-      const now = Date.now();
-      if (!this.lastSendLogTime || now - this.lastSendLogTime > 10000) {
-        console.log('📤 正在向后端发送数据 (每10秒打印一次此消息)');
-        this.lastSendLogTime = now;
-      }
-      
       wx.request({
         url: `${HTTP_URL}/process`,
         method: 'POST',
@@ -1310,6 +1310,16 @@ Page({
 
   navigateToGameRecords: function() {
     wx.navigateTo({ url: '/pages/gameRecords/gameRecords' });
+  },
+
+  navigateToSchulte: function() {
+    wx.navigateTo({ url: '/pages/schulte/schulte' });
+  },
+
+  toggleDataPanel: function() {
+    this.setData({
+      showDataPanel: !this.data.showDataPanel
+    });
   },
   
   enableBLEData: function (data) {
@@ -1494,7 +1504,7 @@ Page({
       series: [{
         name: '样本熵',
         data: [],
-        color: '#ff0000'
+        color: '#4facfe'
       }],
       xAxis: {
         disableGrid: true,
@@ -1506,25 +1516,23 @@ Page({
         title: '样本熵',
         format: val => (typeof val === 'number' ? val.toFixed(2) : val),
         min: 0,
-        max: 10,
+        max: 2,  // 初始范围，会动态调整
         gridColor: '#D8D8D8',
         fontColor: '#ffffff',
         titleFontColor: '#ffffff'
       },
       width: windowWidth * 0.95,
-      height: 200,
+      height: 120,  // 迷你图表高度
       dataLabel: false,
       dataPointShape: false,
       extra: {
         lineStyle: 'curve'
       },
       legend: {
-        show: true,
-        position: 'topRight',
-        color: '#ffffff'
+        show: false  // 隐藏图例节省空间
       },
       background: '#00000000',
-      padding: [40, 10, 20, 20]
+      padding: [30, 10, 15, 30]
     });
 
     this.setData({ chartInited: true });
@@ -1557,12 +1565,41 @@ Page({
   refreshChart: function() {
     if (!lineChart || !this.data.chartInited) return;
 
+    const data = this.data.chartData.tbrData;
+    
+    // 动态计算Y轴范围
+    let yMin = 0;
+    let yMax = 2;
+    
+    if (data.length > 0) {
+      const minVal = Math.min(...data);
+      const maxVal = Math.max(...data);
+      const range = maxVal - minVal;
+      
+      // 如果数据范围太小，设置最小范围
+      if (range < 0.5) {
+        const center = (maxVal + minVal) / 2;
+        yMin = Math.max(0, center - 0.5);
+        yMax = center + 0.5;
+      } else {
+        // 添加20%的余量
+        yMin = Math.max(0, minVal - range * 0.2);
+        yMax = maxVal + range * 0.2;
+      }
+    }
+
     lineChart.updateData({
       categories: this.data.chartData.timePoints,
       series: [{
         name: '样本熵',
-        data: this.data.chartData.tbrData
-      }]
+        data: data,
+        color: '#4facfe'
+      }],
+      yAxis: {
+        min: yMin,
+        max: yMax,
+        format: val => (typeof val === 'number' ? val.toFixed(2) : val)
+      }
     });
   },
 

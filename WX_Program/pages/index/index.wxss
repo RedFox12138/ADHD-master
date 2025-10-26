@@ -1,10 +1,52 @@
-/* 基础容器样式 */
+/* 基础容器样式 - 游戏化布局 */
 .container {
-  padding: 40rpx;
+  padding: 0;
   background: linear-gradient(135deg, #1a237e 0%, #3f51b5 50%, #0d1440 100%);
   min-height: 100vh;
   position: relative;
   overflow: hidden;
+}
+
+/* 启动封面 - 在container之前插入 */
+.start-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;             /* 在背景之上,但在UI元素之下 */
+  animation: fadeIn 0.5s ease-in;
+}
+
+.start-cover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000000;
+  z-index: -1;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .container::before {
@@ -16,6 +58,332 @@
   bottom: 0;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.03)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.04)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
   pointer-events: none;
+  z-index: 0;
+}
+
+/* 顶部工具栏 */
+.top-toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 88rpx;
+  background: rgba(26, 35, 126, 0.95);
+  backdrop-filter: blur(20rpx);
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 30rpx;
+  z-index: 1000;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.3);
+}
+
+.status-compact {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.status-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.dot-connected {
+  background: #4caf50;
+  box-shadow: 0 0 16rpx rgba(76, 175, 80, 0.8);
+}
+
+.dot-disconnected {
+  background: #f44336;
+  box-shadow: 0 0 16rpx rgba(244, 67, 54, 0.6);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-text {
+  font-size: 26rpx;
+  color: white;
+  font-weight: 500;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.icon-btn {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.icon-btn:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.icon-btn .icon {
+  font-size: 32rpx;
+}
+
+/* 服务器状态指示器 */
+.server-indicator {
+  position: fixed;
+  top: 100rpx;
+  right: 20rpx;
+  padding: 12rpx 24rpx;
+  border-radius: 30rpx;
+  backdrop-filter: blur(15rpx);
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 24rpx;
+  z-index: 999;
+  transition: all 0.3s;
+}
+
+.server-online {
+  background: rgba(76, 175, 80, 0.2);
+  border: 1rpx solid rgba(76, 175, 80, 0.4);
+}
+
+.server-offline {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1rpx solid rgba(244, 67, 54, 0.4);
+}
+
+.indicator-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.server-online .indicator-dot {
+  background: #4caf50;
+}
+
+.server-offline .indicator-dot {
+  background: #f44336;
+}
+
+.indicator-text {
+  color: white;
+  font-weight: 500;
+}
+
+/* 侧边数据面板 */
+.side-panel {
+  position: fixed;
+  left: 0;
+  top: 150rpx;
+  width: 320rpx;
+  background: rgba(26, 35, 126, 0.9);
+  backdrop-filter: blur(20rpx);
+  border-radius: 0 24rpx 24rpx 0;
+  box-shadow: 4rpx 0 20rpx rgba(0, 0, 0, 0.3);
+  z-index: 900;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-collapsed {
+  transform: translateX(-280rpx);
+}
+
+.panel-open {
+  transform: translateX(0);
+}
+
+.panel-toggle {
+  position: absolute;
+  right: -48rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48rpx;
+  height: 96rpx;
+  background: rgba(26, 35, 126, 0.9);
+  border-radius: 0 24rpx 24rpx 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.toggle-icon {
+  font-size: 28rpx;
+  color: white;
+}
+
+.panel-content {
+  padding: 30rpx 20rpx;
+}
+
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.data-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.data-value {
+  font-size: 28rpx;
+  color: white;
+  font-weight: 600;
+}
+
+.mini-chart {
+  margin-top: 20rpx;
+  padding: 10rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12rpx;
+}
+
+/* 底部浮动操作栏 */
+.bottom-action-bar {
+  position: fixed;
+  bottom: 60rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+  width: 90%;
+  max-width: 600rpx;
+}
+
+.main-action {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 20rpx;
+}
+
+.action-btn-large {
+  min-width: 320rpx;
+  height: 120rpx;
+  border-radius: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.4);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn-large::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.action-btn-large:active::before {
+  left: 100%;
+}
+
+.action-btn-large:active {
+  transform: translateY(6rpx);
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.3);
+}
+
+.btn-ready {
+  background: linear-gradient(135deg, #4caf50, #66bb6a);
+  color: white;
+  box-shadow: 0 12rpx 40rpx rgba(76, 175, 80, 0.5);
+}
+
+.btn-disabled {
+  background: linear-gradient(135deg, #9e9e9e, #bdbdbd);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #f44336, #e57373);
+  color: white;
+  box-shadow: 0 12rpx 40rpx rgba(244, 67, 54, 0.5);
+}
+
+.btn-icon {
+  font-size: 56rpx;
+}
+
+.btn-text {
+  font-size: 36rpx;
+  letter-spacing: 2rpx;
+}
+
+.secondary-actions {
+  position: fixed;
+  bottom: -50rpx;  /* 在主操作按钮上方 */
+  left: 80%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20rpx;
+  padding: 0;
+  backdrop-filter: none;
+  border-radius: 0;
+  z-index: 999;
+  width: 90%;
+  max-width: 300rpx;
+}
+
+.action-item {
+  flex: 1;
+  display: flex;
+  flex-direction: row;  /* 改为横向排列 */
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 20rpx;  /* 扁平圆角 */
+  background: hsla(208, 89%, 49%, 0.91);
+  backdrop-filter: blur(10rpx);
+  transition: all 0.2s;
+  border: 2rpx solid rgba(255, 255, 255, 0.2);
+}
+
+.action-item:active {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.action-icon {
+  font-size: 44rpx;
+}
+
+.action-label {
+  font-size: 28rpx;
+  color: white;
+  font-weight: 600;
 }
 
 /* 头部状态卡片 */
@@ -178,16 +546,21 @@
   border-left: 4rpx solid rgba(255, 255, 255, 0.3);
 }
 
-/* ========== 基线收集阶段 ========== */
+/* ========== 基线收集阶段 - 居中显示 ========== */
 .baseline-container {
-  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(139, 195, 74, 0.1));
-  border-radius: 24rpx;
-  padding: 60rpx 40rpx;
-  margin: 40rpx 0;
-  backdrop-filter: blur(20rpx);
-  border: 1rpx solid rgba(76, 175, 80, 0.3);
-  box-shadow: 0 12rpx 40rpx rgba(76, 175, 80, 0.2);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600rpx;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(139, 195, 74, 0.9));
+  border-radius: 32rpx;
+  padding: 80rpx 60rpx;
+  backdrop-filter: blur(30rpx);
+  border: 2rpx solid rgba(76, 175, 80, 0.5);
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.4);
   text-align: center;
+  z-index: 500;
 }
 
 .baseline-title {
@@ -231,17 +604,16 @@
   margin-top: 20rpx;
 }
 
-/* ========== 保卫小镇游戏界面 ========== */
+/* ========== 保卫小镇游戏界面 - 全屏游戏模式 ========== */
 .game-container {
-  width: 100%;
-  height: 1200rpx;
-  position: relative;
+  position: fixed;
+  top: 88rpx;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow: hidden;
-  border-radius: 32rpx;
   background: linear-gradient(135deg, #2e7d32 0%, #66bb6a 50%, #1b5e20 100%);
-  box-shadow: 0 16rpx 48rpx rgba(0,0,0,0.3);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 40rpx;
+  z-index: 100;
   touch-action: none; /* 禁用默认触摸行为，防止页面滚动 */
 }
 

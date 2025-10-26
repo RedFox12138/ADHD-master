@@ -2,7 +2,8 @@
   "pages": [
     "pages/index/index",
     "pages/scan/scan",
-    "pages/history/history"
+    "pages/history/history",
+    "pages/schulte/schulte"
   ],
   "window": {
     "navigationBarTitleText": "保卫小镇 - ADHD注意力训练"

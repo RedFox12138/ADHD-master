@@ -71,11 +71,7 @@
     </view>
 
     <view class="chart-container">
-      <canvas canvas-id="historyChart" class="chart-canvas"></canvas>
-    </view>
-
-    <view class="chart-tip">
-      <text>💡 双指捏合缩放，单指拖动平移查看详情</text>
+      <canvas type="2d" id="historyChart" class="chart-canvas"></canvas>
     </view>
   </view>
 
@@ -140,19 +136,13 @@
     </view>
 
     <!-- 图表信息（简化版） -->
-    <view class="chart-info-simple">
-      <text class="info-text">
-        {{dataType === 'feature' && chartData.baseline ? '基线: ' + chartData.baseline.toFixed(2) + ' | ' : ''}}显示: {{viewStart}}-{{viewStart + viewRange}} / {{chartData.totalPoints}}
-      </text>
-      <text class="gesture-hint">💡 双指捏合缩放，单指拖动平移</text>
+    <view class="chart-info-simple" wx:if="{{dataType === 'feature' && chartData.baseline !== null && chartData.baseline !== undefined}}">
+      <text class="info-text">基线: {{chartData.baseline.toFixed(2)}}</text>
     </view>
 
-    <!-- 图表容器（支持触摸手势） -->
-    <view class="chart-container"
-          bindtouchstart="onChartTouchStart"
-          bindtouchmove="onChartTouchMove"
-          bindtouchend="onChartTouchEnd">
-      <canvas canvas-id="historyChart" class="chart-canvas"></canvas>
+    <!-- 图表容器 -->
+    <view class="chart-container">
+      <canvas type="2d" id="historyChart" class="chart-canvas"></canvas>
     </view>
   </view>
 

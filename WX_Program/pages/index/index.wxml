@@ -1,27 +1,64 @@
 <view class="container">
-  <!-- 连接状态显示 -->
-  <view class="status-card">
-    <view class="status">
-      设备状态：{{connected ? '已连接 ' + deviceName : '未连接'}}
-    </view>
-    <view class="status {{socketConnected ? 'status-online' : 'status-offline'}}">
-      服务器：{{socketConnected ? '已连接 ✓' : (isReconnecting ? '重连中...' : '未连接 ✗')}}
-      {{isReconnecting ? '(第' + reconnectAttempts + '次)' : ''}}
-    </view>
-  </view>
-  
-  <!-- 图表区域 -->
-  <view class="chart-container">
-    <canvas
-      canvas-id="eegChart"
-      style="width:100%; height:200px;"
-      disable-scroll="true"
-    ></canvas>
+  <!-- 启动封面 -->
+  <view class="start-cover" wx:if="{{showStartCover}}">
+    <image class="cover-image" src="/images/游戏封面.png" mode="aspectFit"></image>
   </view>
 
-  <!-- 参数显示 -->
-  <view class="parameter">
-    <view>⚡ 样本熵：{{powerRatio !== null ? powerRatio : '未计算'}}</view>
+  <!-- 顶部工具栏 - 固定在顶部 -->
+  <view class="top-toolbar">
+    <!-- 左侧：连接状态 -->
+    <view class="status-compact">
+      <text class="status-dot {{connected ? 'dot-connected' : 'dot-disconnected'}}"></text>
+      <text class="status-text">{{connected ? deviceName : '未连接'}}</text>
+    </view>
+    
+    <!-- 右侧：快捷按钮 -->
+    <view class="toolbar-actions">
+      <view class="icon-btn" bindtap="navigateToScan">
+        <text class="icon">{{connected ? '🔄' : '🔍'}}</text>
+      </view>
+      <view class="icon-btn" bindtap="toggleDataSending" wx:if="{{connected}}">
+        <text class="icon">{{isDataSending ? '⏹️' : '▶️'}}</text>
+      </view>
+      <view class="icon-btn" bindtap="navigateToHistory">
+        <text class="icon">📊</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 服务器状态指示器 - 浮动显示 -->
+  <view class="server-indicator {{socketConnected ? 'server-online' : 'server-offline'}}">
+    <text class="indicator-dot"></text>
+    <text class="indicator-text">{{socketConnected ? '服务器在线' : (isReconnecting ? '重连中(' + reconnectAttempts + ')' : '服务器离线')}}</text>
+  </view>
+
+  <!-- 侧边数据面板 - 可折叠 -->
+  <view class="side-panel {{showDataPanel ? 'panel-open' : 'panel-collapsed'}}" wx:if="{{experimentStarted && currentPhase !== '治疗阶段'}}">
+    <view class="panel-toggle" bindtap="toggleDataPanel">
+      <text class="toggle-icon">{{showDataPanel ? '◀' : '▶'}}</text>
+    </view>
+    <view class="panel-content" wx:if="{{showDataPanel}}">
+      <view class="data-row">
+        <text class="data-label">样本熵</text>
+        <text class="data-value">{{powerRatio !== null ? powerRatio : '--'}}</text>
+      </view>
+      <view class="data-row">
+        <text class="data-label">基准值</text>
+        <text class="data-value">{{baselineValue !== null ? baselineValue : '--'}}</text>
+      </view>
+      <view class="data-row">
+        <text class="data-label">当前注意力</text>
+        <text class="data-value">{{currentAttention !== null ? currentAttention : '--'}}</text>
+      </view>
+      <!-- 迷你图表 -->
+      <view class="mini-chart">
+        <canvas
+          canvas-id="eegChart"
+          style="width:100%; height:120px;"
+          disable-scroll="true"
+        ></canvas>
+      </view>
+    </view>
   </view>
 
   <!-- 基线收集阶段 -->
@@ -152,55 +189,36 @@
     </view>
   </view>
   
-  
-  <!-- 实验信息 -->
-  <view class="experiment-info" wx:if="{{experimentStarted && currentPhase !== '治疗阶段'}}">
-    <view wx:if="{{currentPhase === '准备阶段'}}">
-      <text>🎯 准备中：{{remainingTime}}秒后开始基准测试</text>
-    </view>
-    <view>📊 实验阶段：{{currentPhase}}</view>
-    <view>⏰ 剩余时间：{{remainingTime}}秒</view>
-    <view>📏 基准值：{{baselineValue !== null ? baselineValue : '计算中'}}</view>
-    <view>🧠 当前注意力：{{currentAttention !== null ? currentAttention : '计算中'}}</view>
-  </view>
-  
-  <!-- 控制按钮区域 -->
-  <view class="control-panel">
-    <!-- 主要操作按钮 -->
-    <view class="main-actions">
-      <button class="control-btn primary" bindtap="navigateToScan">
-        {{connected ? '🔄 重新连接' : '� 搜索设备'}}
-      </button>
-      
-      <!-- 数据发送切换按钮 -->
-      <button 
-        class="control-btn {{isDataSending ? 'danger' : 'success'}}" 
-        bindtap="toggleDataSending"
-        wx:if="{{connected}}"
-      >
-        {{isDataSending ? '⏹️ 停止发送' : '▶️ 发送数据'}}
-      </button>
-
+  <!-- 底部浮动操作栏 -->
+  <view class="bottom-action-bar" wx:if="{{!experimentStarted || currentPhase !== '治疗阶段'}}">
+    <!-- 主操作按钮 -->
+    <view class="main-action">
       <button
-        class="control-btn success"
+        class="action-btn-large {{socketConnected && connected ? 'btn-ready' : 'btn-disabled'}}"
         bindtap="startExperiment"
         wx:if="{{!experimentStarted && connected}}"
         disabled="{{!socketConnected}}"
       >
-        {{socketConnected ? '🚀 开始实验' : '⏳ 等待服务器连接...'}}
+        <text class="btn-icon">🚀</text>
+        <text class="btn-text">{{socketConnected ? '开始训练' : '等待连接...'}}</text>
       </button>
 
       <button
-        class="control-btn danger"
+        class="action-btn-large btn-danger"
         bindtap="stopExperiment"
         wx:if="{{experimentStarted}}"
       >
-        ⏹️ 结束实验
+        <text class="btn-icon">⏹️</text>
+        <text class="btn-text">结束实验</text>
       </button>
-
-      <button class="control-btn secondary" bindtap="navigateToHistory">
-        📊 历史记录
-      </button>
+    </view>
+    
+    <!-- 次要操作 -->
+    <view class="secondary-actions" wx:if="{{!experimentStarted}}">
+      <view class="action-item" bindtap="navigateToSchulte">
+        <text class="action-icon">🎯</text>
+        <text class="action-label">舒尔特</text>
+      </view>
     </view>
   </view>
 </view>

@@ -999,6 +999,118 @@ def get_game_records():
             "error": str(e)
         }), 500
 
+@app.route('/saveSchulteRecord', methods=['POST'])
+def save_schulte_record():
+    """
+    保存舒尔特方格训练记录
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('userId', 'user001')
+        difficulty = data.get('difficulty', '5x5')  # 5x5, 6x6, 7x7
+        time = data.get('time', 0)  # 完成用时（秒）
+        
+        if time <= 0:
+            return jsonify({"success": False, "error": "无效的用时"}), 400
+        
+        # 舒尔特方格记录目录路径（按用户和难度分类）
+        records_dir = os.path.join('data', user_id, 'schulte_records', difficulty)
+        os.makedirs(records_dir, exist_ok=True)
+        
+        # 获取当前日期
+        current_time = datetime.datetime.now()
+        date_str = current_time.strftime("%Y-%m-%d")
+        timestamp = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 记录文件路径（按日期命名）
+        record_file = os.path.join(records_dir, f"{date_str}.txt")
+        
+        # 追加记录（格式：时间戳,用时）
+        with open(record_file, 'a', encoding='utf-8') as f:
+            f.write(f"{timestamp},{time}\n")
+        
+        print(f"[舒尔特记录] 用户 {user_id} 难度 {difficulty} 用时 {time}秒 已保存")
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"[舒尔特记录错误] {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/getSchulteRecords', methods=['GET'])
+def get_schulte_records():
+    """
+    获取舒尔特方格训练记录
+    """
+    try:
+        user_id = request.args.get('userId', 'user001')
+        difficulty = request.args.get('difficulty', '5x5')
+        
+        # 舒尔特方格记录目录路径
+        records_dir = os.path.join('data', user_id, 'schulte_records', difficulty)
+        
+        if not os.path.exists(records_dir):
+            return jsonify({
+                "success": True,
+                "records": [],
+                "stats": {
+                    "bestTime": 0,
+                    "avgTime": 0,
+                    "totalGames": 0
+                }
+            })
+        
+        # 读取所有记录文件
+        all_records = []
+        for filename in os.listdir(records_dir):
+            if filename.endswith('.txt'):
+                file_path = os.path.join(records_dir, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                parts = line.split(',')
+                                if len(parts) >= 2:
+                                    timestamp = parts[0]
+                                    time_value = float(parts[1])
+                                    all_records.append({
+                                        "timestamp": timestamp,
+                                        "time": time_value,
+                                        "date": timestamp.split()[0]
+                                    })
+                except Exception as e:
+                    print(f"[读取文件错误] {filename}: {e}")
+                    continue
+        
+        # 按时间戳排序（最新的在前）
+        all_records.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        # 计算统计数据
+        stats = {
+            "bestTime": 0,
+            "avgTime": 0,
+            "totalGames": 0
+        }
+        
+        if all_records:
+            times = [r['time'] for r in all_records]
+            stats['bestTime'] = min(times)
+            stats['avgTime'] = sum(times) / len(times)
+            stats['totalGames'] = len(times)
+        
+        return jsonify({
+            "success": True,
+            "records": all_records[:50],  # 返回最近50条记录
+            "stats": stats
+        })
+
+    except Exception as e:
+        print(f"[获取舒尔特记录错误] {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
     flask_thread = threading.Thread(target=run_flask, daemon=True)

@@ -1,0 +1,143 @@
+<view class="container">
+  <!-- 头部卡片 -->
+  <view class="header-card">
+    <view class="title">🎯 舒尔特方格训练</view>
+    <view class="subtitle">提升注意力和视觉追踪能力</view>
+  </view>
+
+  <!-- 难度选择 -->
+  <view class="difficulty-selector" wx:if="{{!gameStarted}}">
+    <view class="selector-title">选择难度</view>
+    <view class="difficulty-options">
+      <view 
+        class="difficulty-card {{selectedDifficulty === '5x5' ? 'selected' : ''}}"
+        bindtap="selectDifficulty"
+        data-difficulty="5x5"
+      >
+        <view class="diff-icon">🌟</view>
+        <view class="diff-name">简单</view>
+        <view class="diff-desc">5×5 方格</view>
+      </view>
+      
+      <view 
+        class="difficulty-card {{selectedDifficulty === '6x6' ? 'selected' : ''}}"
+        bindtap="selectDifficulty"
+        data-difficulty="6x6"
+      >
+        <view class="diff-icon">⭐</view>
+        <view class="diff-name">中等</view>
+        <view class="diff-desc">6×6 方格</view>
+      </view>
+      
+      <view 
+        class="difficulty-card {{selectedDifficulty === '7x7' ? 'selected' : ''}}"
+        bindtap="selectDifficulty"
+        data-difficulty="7x7"
+      >
+        <view class="diff-icon">✨</view>
+        <view class="diff-name">困难</view>
+        <view class="diff-desc">7×7 方格</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 历史记录卡片 -->
+  <view class="history-card" wx:if="{{!gameStarted}}">
+    <view class="history-header">
+      <text class="history-title">📊 历史记录</text>
+      <text class="history-filter">{{selectedDifficulty}}</text>
+    </view>
+    
+    <view class="stats-row">
+      <view class="stat-item">
+        <text class="stat-label">最佳</text>
+        <text class="stat-value">{{bestTime > 0 ? bestTime + 's' : '--'}}</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-label">平均</text>
+        <text class="stat-value">{{avgTime > 0 ? avgTime + 's' : '--'}}</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-label">次数</text>
+        <text class="stat-value">{{totalGames}}</text>
+      </view>
+    </view>
+
+    <!-- 历史趋势图 -->
+    <view class="chart-container" wx:if="{{records.length > 0}}">
+      <view class="chart-title">📈 训练趋势</view>
+      <canvas 
+        canvas-id="schulteChart" 
+        style="width:100%; height:300px;"
+        disable-scroll="true"
+      ></canvas>
+      <view class="chart-tip">最近{{records.length}}次训练记录</view>
+    </view>
+    <view class="no-records" wx:else>
+      <text>暂无记录，开始你的第一次挑战吧！</text>
+    </view>
+  </view>
+
+  <!-- 游戏界面 -->
+  <view class="game-area" wx:if="{{gameStarted}}">
+    <!-- 游戏状态栏 -->
+    <view class="game-status">
+      <view class="status-item">
+        <text class="status-label">目标</text>
+        <text class="status-value highlight">{{currentNumber}}</text>
+      </view>
+      <view class="status-item">
+        <text class="status-label">用时</text>
+        <text class="status-value">{{elapsedTime}}s</text>
+      </view>
+      <view class="status-item">
+        <text class="status-label">进度</text>
+        <text class="status-value">{{currentNumber - 1}}/{{gridSize * gridSize}}</text>
+      </view>
+    </view>
+
+    <!-- 舒尔特方格 -->
+    <view class="grid-container">
+      <view class="grid-wrapper" style="grid-template-columns: repeat({{gridSize}}, 1fr);">
+        <view 
+          wx:for="{{grid}}" 
+          wx:key="index"
+          class="grid-cell {{item.found ? 'found' : ''}}"
+          bindtap="onCellTap"
+          data-number="{{item.number}}"
+        >
+          <text class="cell-number">{{item.number}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 游戏操作按钮 -->
+    <view class="game-controls">
+      <button class="control-btn quit-btn" bindtap="quitGame">
+        <text class="btn-icon">❌</text>
+        <text class="btn-text">放弃</text>
+      </button>
+    </view>
+  </view>
+
+  <!-- 开始按钮 -->
+  <view class="start-section" wx:if="{{!gameStarted}}">
+    <button class="start-btn" bindtap="startGame">
+      <text class="start-icon">🚀</text>
+      <text class="start-text">开始挑战</text>
+    </button>
+  </view>
+
+  <!-- 完成弹窗 -->
+  <view class="complete-modal" wx:if="{{showCompleteModal}}">
+    <view class="modal-content">
+      <view class="modal-icon">🎉</view>
+      <view class="modal-title">挑战完成!</view>
+      <view class="modal-time">用时: {{elapsedTime}}秒</view>
+      <view class="modal-message" wx:if="{{isNewRecord}}">
+        <text class="new-record">🏆 新记录!</text>
+      </view>
+      <button class="modal-btn" bindtap="closeModal">继续训练</button>
+    </view>
+  </view>
+</view>

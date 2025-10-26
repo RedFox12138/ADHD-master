@@ -1,4 +1,4 @@
-// pages/history/history.js
+﻿// pages/history/history.js
 const wxCharts = require('../../utils/wxcharts.js');
 
 Page({
@@ -21,11 +21,6 @@ Page({
       totalPoints: 0
     },
     
-    // 缩放和拖动
-    zoomLevel: 1, // 缩放级别 (0.5-5)
-    viewStart: 0, // 当前视图起始位置（数据点索引）
-    viewRange: 100, // 当前视图显示的数据点数量
-    
     // 游戏记录相关
     gameRecords: [],
     totalGames: 0,
@@ -33,15 +28,7 @@ Page({
     maxTime: 0,
     trend: '', // 'improving', 'stable', 'declining'
     suggestion: '', // 训练建议
-    analysis: null, // 完整的分析数据
-    
-    // 触摸手势相关
-    touchStartX: 0,
-    touchStartY: 0,
-    lastTouchDistance: 0,
-    lastViewStart: 0,
-    lastViewRange: 100,
-    isTouching: false
+    analysis: null // 完整的分析数据
   },
 
   onLoad: function() {
@@ -234,12 +221,9 @@ Page({
             this.setData({
               chartData: {
                 values: res.data.data,
-                baseline: res.data.baseline,
+                baseline: res.data.baseline !== undefined ? res.data.baseline : null,
                 totalPoints: res.data.totalPoints
               },
-              viewRange: Math.min(100, res.data.totalPoints),
-              viewStart: 0,
-              zoomLevel: 1,
               showChart: true,
               loading: false
             }, () => {
@@ -258,159 +242,165 @@ Page({
     });
   },
 
-  // 渲染图表
+  // 渲染图表 - 使用Canvas直接绘制(显示全部数据)
   renderChart: function() {
     const { values, baseline, totalPoints } = this.data.chartData;
-    const { viewStart, viewRange } = this.data;
     
-    // 截取当前视图范围的数据
-    const endIndex = Math.min(viewStart + viewRange, totalPoints);
-    const viewValues = values.slice(viewStart, endIndex);
-    
-    // 生成时间标签（特征图每2秒一个点）
-    const times = viewValues.map((_, i) => {
-      const timeIndex = viewStart + i;
-      return `${(timeIndex * 2).toFixed(0)}s`;
-    });
-
-    // 构建系列数据
-    const series = [{
-      name: '样本熵',
-      data: viewValues,
-      color: '#1aad19',
-      width: 2
-    }];
-
-    // 添加基线
-    if (baseline !== null) {
-      series.push({
-        name: '基线',
-        data: viewValues.map(() => baseline),
-        color: '#ff0000',
-        width: 2
-      });
+    if (!values || values.length === 0) {
+      console.warn('[特征图表] 没有数据');
+      return;
     }
 
-    // 计算Y轴范围（自适应）
-    let allValues = [...viewValues];
+    // 计算Y轴范围 - 使用全部数据
+    let allValues = [...values];
     if (baseline !== null) {
-      allValues.push(baseline); // 包含基线值
+      allValues.push(baseline);
     }
+    
     const minVal = Math.min(...allValues);
     const maxVal = Math.max(...allValues);
     const range = maxVal - minVal;
-    const yMin = minVal - range * 0.1; // 下方留10%空间
-    const yMax = maxVal + range * 0.1; // 上方留10%空间
+    
+    let yMin, yMax;
+    if (range === 0) {
+      yMin = minVal - 1;
+      yMax = maxVal + 1;
+    } else {
+      // 使用50%边距确保所有点可见
+      const padding = range * 0.5;
+      yMin = minVal - padding;
+      yMax = maxVal + padding;
+    }
+    
+    console.log('[特征图表] Y轴范围:', { minVal, maxVal, yMin, yMax });
 
     try {
       const systemInfo = wx.getSystemInfoSync();
       const windowWidth = systemInfo.windowWidth;
 
-      new wxCharts({
-        width: windowWidth * 0.95,
-        height: 350,
-        canvasId: 'historyChart',
-        type: 'line',
-        categories: times,
-        series: series,
-        xAxis: {
-          disableGrid: false,
-          axisLineColor: '#999',
-          fontColor: '#333',
-          labelCount: 10
-        },
-        yAxis: {
-          title: '数值',
-          min: yMin,
-          max: yMax,
-          format: val => val.toFixed(2)
-        },
-        dataLabel: false,
-        dataPointShape: false,
-        extra: {
-          lineStyle: 'curve'
-        },
-        legend: {
-          show: true,
-          position: 'top',
-          color: '#333'
-        },
-        background: '#ffffff',
-        padding: [15, 10, 15, 20],
-        animation: false
+      // 使用Canvas 2D直接绘制
+      const query = wx.createSelectorQuery();
+      query.select('#historyChart').fields({ node: true, size: true }).exec((res) => {
+        if (!res || !res[0]) {
+          console.error('[特征图表] Canvas节点未找到');
+          return;
+        }
+
+        const canvas = res[0].node;
+        const ctx = canvas.getContext('2d');
+        const dpr = wx.getSystemInfoSync().pixelRatio;
+
+        // 设置canvas尺寸
+        canvas.width = res[0].width * dpr;
+        canvas.height = res[0].height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const width = res[0].width;
+        const height = res[0].height;
+        const padding = { top: 40, right: 50, bottom: 50, left: 60 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+
+        // 清空画布
+        ctx.clearRect(0, 0, width, height);
+
+        // 绘制背景
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        // 绘制标题
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('样本熵趋势图', width / 2, 25);
+
+        // 绘制网格和Y轴刻度
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.fillStyle = '#666666';
+        ctx.font = '11px sans-serif';
+        ctx.lineWidth = 1;
+
+        const ySteps = 6;
+        for (let i = 0; i <= ySteps; i++) {
+          const y = padding.top + (chartHeight / ySteps) * i;
+          const value = yMax - (yMax - yMin) / ySteps * i;
+
+          // 网格线
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + chartWidth, y);
+          ctx.stroke();
+
+          // Y轴标签
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(value.toFixed(2), padding.left - 10, y);
+        }
+
+        // 绘制X轴刻度
+        const xLabelCount = Math.min(10, values.length);
+        const xLabelStep = Math.floor(values.length / xLabelCount) || 1;
+        ctx.textAlign = 'center';
+        for (let i = 0; i < values.length; i += xLabelStep) {
+          const x = padding.left + (i / (values.length - 1 || 1)) * chartWidth;
+          const label = `${(i * 2).toFixed(0)}s`;
+          ctx.fillText(label, x, height - 20);
+        }
+
+        // 绘制数据折线
+        ctx.strokeStyle = '#1aad19';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        values.forEach((val, idx) => {
+          const x = padding.left + (idx / (values.length - 1 || 1)) * chartWidth;
+          const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
+
+          if (idx === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+
+        // 绘制数据点
+        ctx.fillStyle = '#1aad19';
+        values.forEach((val, idx) => {
+          const x = padding.left + (idx / (values.length - 1 || 1)) * chartWidth;
+          const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
+
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+
+        // 绘制基线
+        if (baseline !== null) {
+          const baselineY = padding.top + chartHeight - ((baseline - yMin) / (yMax - yMin)) * chartHeight;
+          
+          ctx.strokeStyle = '#ff0000';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(padding.left, baselineY);
+          ctx.lineTo(padding.left + chartWidth, baselineY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 基线标签
+          ctx.fillStyle = '#ff0000';
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(`基线: ${baseline.toFixed(2)}`, padding.left + chartWidth + 5, baselineY);
+        }
+
+        console.log('[特征图表] 绘制完成');
       });
     } catch (e) {
       console.error('图表渲染失败:', e);
       wx.showToast({ title: '图表渲染失败', icon: 'none' });
     }
-  },
-
-  // 缩放控制
-  zoomIn: function() {
-    let newZoom = this.data.zoomLevel * 1.5;
-    if (newZoom > 5) newZoom = 5;
-    
-    const newRange = Math.floor(this.data.viewRange / 1.5);
-    this.setData({
-      zoomLevel: newZoom,
-      viewRange: Math.max(10, newRange)
-    }, () => {
-      this.renderChart();
-    });
-  },
-
-  zoomOut: function() {
-    let newZoom = this.data.zoomLevel / 1.5;
-    if (newZoom < 0.5) newZoom = 0.5;
-    
-    const newRange = Math.floor(this.data.viewRange * 1.5);
-    const maxRange = this.data.chartData.totalPoints;
-    
-    this.setData({
-      zoomLevel: newZoom,
-      viewRange: Math.min(maxRange, newRange),
-      viewStart: Math.max(0, Math.min(this.data.viewStart, maxRange - newRange))
-    }, () => {
-      this.renderChart();
-    });
-  },
-
-  // 时间轴滑动
-  onTimeSliderChange: function(e) {
-    const value = e.detail.value;
-    const maxStart = Math.max(0, this.data.chartData.totalPoints - this.data.viewRange);
-    const newStart = Math.floor((value / 100) * maxStart);
-    
-    this.setData({
-      viewStart: newStart
-    }, () => {
-      this.renderChart();
-    });
-  },
-
-  // 左移视图
-  moveLeft: function() {
-    const step = Math.floor(this.data.viewRange * 0.2);
-    const newStart = Math.max(0, this.data.viewStart - step);
-    
-    this.setData({
-      viewStart: newStart
-    }, () => {
-      this.renderChart();
-    });
-  },
-
-  // 右移视图
-  moveRight: function() {
-    const step = Math.floor(this.data.viewRange * 0.2);
-    const maxStart = Math.max(0, this.data.chartData.totalPoints - this.data.viewRange);
-    const newStart = Math.min(maxStart, this.data.viewStart + step);
-    
-    this.setData({
-      viewStart: newStart
-    }, () => {
-      this.renderChart();
-    });
   },
 
   // 返回文件列表
@@ -498,175 +488,137 @@ Page({
     });
   },
 
-  // 渲染游戏记录图表
+  // 渲染游戏记录图表 - 使用Canvas直接绘制
   renderGameChart: function(records) {
     try {
-      const systemInfo = wx.getSystemInfoSync();
-      const windowWidth = systemInfo.windowWidth;
-
-      // 准备数据（最多显示最近20次）
-      const displayRecords = records.slice(-20);
-      const categories = displayRecords.map((_, index) => `第${index + 1}次`);
+      // 准备数据（最多显示最近30次）
+      const displayRecords = records.length > 30 ? records.slice(-30) : records;
       const data = displayRecords.map(r => r.gameTime);
 
-      // 计算Y轴范围（改进算法，更好地处理离群点）
+      if (data.length === 0) {
+        console.warn('[游戏记录] 没有数据');
+        return;
+      }
+
+      // 计算Y轴范围
       const minVal = Math.min(...data);
       const maxVal = Math.max(...data);
       const range = maxVal - minVal;
-      
-      // 如果range很小（数据集中），扩大范围以便看清楚
+
       let yMin, yMax;
-      if (range < 10) {
-        // 数据很集中，使用固定范围
-        const center = (maxVal + minVal) / 2;
-        yMin = Math.max(0, center - 10);
-        yMax = center + 10;
+      if (range === 0) {
+        yMin = Math.max(0, minVal - 20);
+        yMax = minVal + 20;
       } else {
-        // 数据分散，使用20%的padding确保离群点可见
-        yMin = Math.max(0, minVal - range * 0.2);
-        yMax = maxVal + range * 0.2;
-      }
-      
-      // 确保Y轴范围至少为20（避免过于压缩）
-      if (yMax - yMin < 20) {
-        const center = (yMax + yMin) / 2;
-        yMin = Math.max(0, center - 10);
-        yMax = center + 10;
+        // 使用50%边距确保所有点可见
+        const padding = range * 0.5;
+        yMin = Math.max(0, minVal - padding);
+        yMax = maxVal + padding;
       }
 
-      new wxCharts({
-        canvasId: 'historyChart',
-        type: 'line',
-        categories: categories,
-        animation: true,
-        series: [{
-          name: '游戏时长(秒)',
-          data: data,
-          color: '#1aad19',
-          width: 3
-        }],
-        xAxis: {
-          disableGrid: false,
-          axisLineColor: '#999',
-          fontColor: '#666',
-          labelCount: 10
-        },
-        yAxis: {
-          title: '时长(秒)',
-          min: yMin,
-          max: yMax,
-          format: val => Math.round(val)
-        },
-        width: windowWidth * 0.9,
-        height: 350,
-        dataLabel: false,
-        dataPointShape: true,
-        extra: {
-          lineStyle: 'curve'
-        },
-        legend: {
-          show: false
-        },
-        background: '#ffffff',
-        padding: [15, 15, 15, 25]
+      console.log('[游戏记录] Y轴范围:', { minVal, maxVal, yMin, yMax, 数据: data });
+
+      // 使用Canvas 2D直接绘制
+      const query = wx.createSelectorQuery();
+      query.select('#historyChart').fields({ node: true, size: true }).exec((res) => {
+        if (!res || !res[0]) {
+          console.error('[游戏记录] Canvas节点未找到');
+          return;
+        }
+
+        const canvas = res[0].node;
+        const ctx = canvas.getContext('2d');
+        const dpr = wx.getSystemInfoSync().pixelRatio;
+
+        // 设置canvas尺寸
+        canvas.width = res[0].width * dpr;
+        canvas.height = res[0].height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const width = res[0].width;
+        const height = res[0].height;
+        const padding = { top: 40, right: 40, bottom: 50, left: 60 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+
+        // 清空画布
+        ctx.clearRect(0, 0, width, height);
+
+        // 绘制背景
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        // 绘制标题
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('游戏时长趋势', width / 2, 25);
+
+        // 绘制网格和Y轴刻度
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.fillStyle = '#666666';
+        ctx.font = '11px sans-serif';
+        ctx.lineWidth = 1;
+
+        const ySteps = 6;
+        for (let i = 0; i <= ySteps; i++) {
+          const y = padding.top + (chartHeight / ySteps) * i;
+          const value = yMax - (yMax - yMin) / ySteps * i;
+
+          // 网格线
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + chartWidth, y);
+          ctx.stroke();
+
+          // Y轴标签
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(Math.round(value) + 's', padding.left - 10, y);
+        }
+
+        // 绘制X轴刻度
+        const xLabelCount = Math.min(10, data.length);
+        const xLabelStep = Math.floor(data.length / xLabelCount) || 1;
+        ctx.textAlign = 'center';
+        for (let i = 0; i < data.length; i += xLabelStep) {
+          const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth;
+          const actualIndex = records.length > 30 ? records.length - 30 + i + 1 : i + 1;
+          ctx.fillText(`第${actualIndex}次`, x, height - 20);
+        }
+
+        // 绘制数据折线
+        ctx.strokeStyle = '#1aad19';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        data.forEach((val, idx) => {
+          const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
+          const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
+
+          if (idx === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+
+        // 绘制数据点
+        ctx.fillStyle = '#1aad19';
+        data.forEach((val, idx) => {
+          const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
+          const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
+
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+
+        console.log('[游戏记录] 绘制完成');
       });
     } catch (e) {
       console.error('[游戏记录] 图表渲染失败:', e);
     }
-  },
-
-  // ============= 触摸手势控制 =============
-  
-  // 触摸开始
-  onChartTouchStart: function(e) {
-    if (this.data.dataType === 'gameRecords') return; // 游戏记录不支持手势
-    
-    this.setData({ isTouching: true });
-    
-    if (e.touches.length === 1) {
-      // 单指触摸 - 准备拖动
-      this.setData({
-        touchStartX: e.touches[0].pageX,
-        lastViewStart: this.data.viewStart
-      });
-    } else if (e.touches.length === 2) {
-      // 双指触摸 - 准备缩放
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
-        Math.pow(touch2.pageY - touch1.pageY, 2)
-      );
-      this.setData({
-        lastTouchDistance: distance,
-        lastViewRange: this.data.viewRange
-      });
-    }
-  },
-
-  // 触摸移动
-  onChartTouchMove: function(e) {
-    if (!this.data.isTouching || this.data.dataType === 'gameRecords') return;
-    
-    if (e.touches.length === 1) {
-      // 单指拖动 - 平移视图
-      const deltaX = e.touches[0].pageX - this.data.touchStartX;
-      const systemInfo = wx.getSystemInfoSync();
-      const windowWidth = systemInfo.windowWidth;
-      
-      // 将像素移动转换为数据点移动
-      const dataPointsPerPixel = this.data.viewRange / (windowWidth * 0.95);
-      const dataPointsDelta = -Math.round(deltaX * dataPointsPerPixel);
-      
-      let newStart = this.data.lastViewStart + dataPointsDelta;
-      const maxStart = Math.max(0, this.data.chartData.totalPoints - this.data.viewRange);
-      newStart = Math.max(0, Math.min(newStart, maxStart));
-      
-      if (newStart !== this.data.viewStart) {
-        this.setData({ viewStart: newStart }, () => {
-          this.renderChart();
-        });
-      }
-    } else if (e.touches.length === 2) {
-      // 双指缩放
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
-        Math.pow(touch2.pageY - touch1.pageY, 2)
-      );
-      
-      const scale = distance / this.data.lastTouchDistance;
-      let newRange = Math.round(this.data.lastViewRange / scale);
-      
-      // 限制缩放范围
-      const minRange = 10;
-      const maxRange = this.data.chartData.totalPoints;
-      newRange = Math.max(minRange, Math.min(newRange, maxRange));
-      
-      // 计算新的缩放级别
-      const newZoomLevel = 100 / newRange;
-      
-      if (newRange !== this.data.viewRange) {
-        // 保持中心点不变
-        const centerRatio = 0.5;
-        let newStart = this.data.viewStart + Math.round((this.data.viewRange - newRange) * centerRatio);
-        const maxStart = Math.max(0, this.data.chartData.totalPoints - newRange);
-        newStart = Math.max(0, Math.min(newStart, maxStart));
-        
-        this.setData({
-          viewRange: newRange,
-          viewStart: newStart,
-          zoomLevel: newZoomLevel
-        }, () => {
-          this.renderChart();
-        });
-      }
-    }
-  },
-
-  // 触摸结束
-  onChartTouchEnd: function(e) {
-    this.setData({ isTouching: false });
   }
 });
