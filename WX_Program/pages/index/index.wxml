@@ -12,8 +12,17 @@
       <text class="status-text">{{connected ? deviceName : '未连接'}}</text>
     </view>
     
+    <!-- 中间：服务器状态 -->
+    <view class="server-status-compact">
+      <text class="status-dot {{socketConnected ? 'dot-connected' : 'dot-disconnected'}}"></text>
+      <text class="status-text">{{socketConnected ? '服务器' : (isReconnecting ? '重连(' + reconnectAttempts + ')' : '离线')}}</text>
+    </view>
+    
     <!-- 右侧：快捷按钮 -->
     <view class="toolbar-actions">
+      <view class="icon-btn" bindtap="toggleSound">
+        <text class="icon">{{soundEnabled ? '🔊' : '🔇'}}</text>
+      </view>
       <view class="icon-btn" bindtap="navigateToScan">
         <text class="icon">{{connected ? '🔄' : '🔍'}}</text>
       </view>
@@ -24,12 +33,6 @@
         <text class="icon">📊</text>
       </view>
     </view>
-  </view>
-
-  <!-- 服务器状态指示器 - 浮动显示 -->
-  <view class="server-indicator {{socketConnected ? 'server-online' : 'server-offline'}}">
-    <text class="indicator-dot"></text>
-    <text class="indicator-text">{{socketConnected ? '服务器在线' : (isReconnecting ? '重连中(' + reconnectAttempts + ')' : '服务器离线')}}</text>
   </view>
 
   <!-- 侧边数据面板 - 可折叠 -->
@@ -63,14 +66,17 @@
 
   <!-- 基线收集阶段 -->
   <view class="baseline-container" wx:if="{{currentPhase === '基准阶段'}}">
-    <view class="baseline-title">请保持放松，小镇正在生成</view>
-    <view class="progress-container">
-      <view class="progress-bar">
-        <view class="progress-fill" style="width: {{(30-remainingTime)/30*100}}%"></view>
+    <image class="baseline-bg-image" src="/images/正在生成小镇.png" mode="widthFix"></image>
+    <view class="baseline-content">
+      <view class="baseline-title">请保持放松，小镇正在生成</view>
+      <view class="progress-container">
+        <view class="progress-bar">
+          <view class="progress-fill" style="width: {{(30-remainingTime)/30*100}}%"></view>
+        </view>
+        <view class="progress-text">{{Math.floor((30-remainingTime)/30*100)}}%</view>
       </view>
-      <view class="progress-text">{{Math.floor((30-remainingTime)/30*100)}}%</view>
+      <view class="baseline-time">剩余时间：{{remainingTime}}秒</view>
     </view>
-    <view class="baseline-time">剩余时间：{{remainingTime}}秒</view>
   </view>
 
   <!-- 保卫小镇游戏界面 -->
@@ -79,6 +85,9 @@
         bindtouchstart="onMapTouchStart"
         bindtouchmove="onMapTouchMove"
         bindtouchend="onMapTouchEnd">
+    
+    <!-- 游戏背景图片 -->
+    <image wx:if="{{gameBackground}}" class="game-background" src="{{gameBackground}}" mode="aspectFill"></image>
     
     <!-- 游戏世界容器（可拖动） -->
     <view class="game-world" style="transform: translate({{mapOffsetX}}px, {{mapOffsetY}}px);">
@@ -95,13 +104,15 @@
       <!-- 炮台 -->
       <view wx:for="{{turrets}}" wx:key="id" class="turret" 
             style="left: {{item.x}}rpx; top: {{item.y}}rpx; transform: translate(-50%, -50%) rotate({{item.rotation}}deg);">
-        <view class="turret-body">🔫</view>
+        <image wx:if="{{item.image}}" class="turret-image" src="{{item.image}}" mode="aspectFit"></image>
+        <view wx:else class="turret-body">🔫</view>
       </view>
 
       <!-- 怪物 -->
       <view wx:for="{{monsters}}" wx:key="id" class="monster {{item.isBoss ? 'boss-monster' : ''}}" 
             style="left: {{item.x}}rpx; top: {{item.y}}rpx;">
-        <view class="monster-body {{item.isBoss ? 'boss-body' : ''}}">{{item.isBoss ? '👹' : '👾'}}</view>
+        <image wx:if="{{item.image}}" class="monster-image {{item.isBoss ? 'boss-image' : ''}}" src="{{item.image}}" mode="aspectFit"></image>
+        <view wx:else class="monster-body {{item.isBoss ? 'boss-body' : ''}}">{{item.isBoss ? '👹' : '👾'}}</view>
         <!-- 怪物血条 -->
         <view class="health-bar monster-health" wx:if="{{item.maxHp > 1}}">
           <view class="health-fill monster-fill" style="width: {{item.hp/item.maxHp*100}}%"></view>
@@ -113,7 +124,8 @@
       <!-- 子弹 -->
       <view wx:for="{{bullets}}" wx:key="id" class="bullet" 
             style="left: {{item.x}}rpx; top: {{item.y}}rpx;">
-        <view class="bullet-body">💥</view>
+        <image wx:if="{{item.image}}" class="bullet-image" src="{{item.image}}" mode="aspectFit"></image>
+        <view wx:else class="bullet-body">💥</view>
       </view>
 
       <!-- 爆炸效果 -->
@@ -123,44 +135,93 @@
       </view>
     </view>
 
-    <!-- 游戏状态面板 -->
-    <view class="game-stats">
-      <view class="stat-row">
-        <view class="stat-item">
-          <text class="stat-label">存活</text>
-          <text class="stat-value">{{survivedTime}}s</text>
+    <!-- 游戏状态面板 - 右侧滑块形式 -->
+    <view class="game-stats-panel {{showGameStats ? '' : 'stats-panel-collapsed'}}">
+      <!-- 折叠按钮 -->
+      <view class="stats-panel-toggle" bindtap="toggleGameStats">
+        <text class="toggle-icon">{{showGameStats ? '▶' : '◀'}}</text>
+      </view>
+      
+      <view class="stats-panel-content" wx:if="{{showGameStats}}">
+        <view class="stats-title">游戏状态</view>
+        
+        <view class="stats-grid">
+          <view class="grid-item">
+            <text class="grid-label">存活</text>
+            <text class="grid-value">{{survivedTime}}s</text>
+          </view>
+          <view class="grid-item">
+            <text class="grid-label">等级</text>
+            <text class="grid-value">Lv.{{playerLevel}}</text>
+          </view>
+          <view class="grid-item">
+            <text class="grid-label">波次</text>
+            <text class="grid-value">{{currentWave}}</text>
+          </view>
+          <view class="grid-item">
+            <text class="grid-label">击败</text>
+            <text class="grid-value">{{defeatedMonsters}}</text>
+          </view>
         </view>
-        <view class="stat-item">
-          <text class="stat-label">等级</text>
-          <text class="stat-value">{{playerLevel}}</text>
+        
+        <view class="stats-divider"></view>
+        
+        <view class="attention-section">
+          <view class="attention-item">
+            <text class="attention-label">基准值</text>
+            <text class="attention-value baseline">{{baselineValue || '--'}}</text>
+          </view>
+          <view class="attention-item">
+            <text class="attention-label">当前值</text>
+            <text class="attention-value current">{{currentAttention || '--'}}</text>
+          </view>
         </view>
-        <view class="stat-item">
-          <text class="stat-label">波次</text>
-          <text class="stat-value">{{currentWave}}</text>
+        
+        <view class="stats-divider"></view>
+        
+        <view class="exp-section">
+          <view class="exp-header">
+            <text class="exp-label">经验值</text>
+            <text class="exp-text">{{experience}}/{{nextLevelExp}}</text>
+          </view>
+          <view class="exp-bar">
+            <view class="exp-fill" style="width: {{experience/nextLevelExp*100}}%"></view>
+          </view>
         </view>
       </view>
-      <view class="stat-row">
-        <view class="stat-item">
-          <text class="stat-label">基准</text>
-          <text class="stat-value">{{baselineValue || '--'}}</text>
-        </view>
-        <view class="stat-item">
-          <text class="stat-label">当前</text>
-          <text class="stat-value">{{currentAttention || '--'}}</text>
-        </view>
-        <view class="stat-item">
-          <text class="stat-label">击败</text>
-          <text class="stat-value">{{defeatedMonsters}}</text>
-        </view>
+    </view>
+
+    <!-- 炮台信息面板 - 左下角可折叠 -->
+    <view class="turret-panel {{showTurretPanel ? '' : 'turret-panel-collapsed'}}">
+      <!-- 折叠按钮 -->
+      <view class="turret-toggle" bindtap="toggleTurretPanel">
+        <text class="toggle-icon">{{showTurretPanel ? '◀' : '▶'}}</text>
       </view>
-      <view class="stat-row">
-        <view class="stat-item-full">
-          <text class="stat-label">经验</text>
-          <text class="stat-value">{{experience}}/{{nextLevelExp}}</text>
+      
+      <view class="turret-content" wx:if="{{showTurretPanel}}">
+        <view class="turret-title">炮台状态</view>
+        <view class="turret-list">
+          <view class="turret-info-item" wx:for="{{turrets}}" wx:key="id">
+            <view class="turret-header">
+              <text class="turret-icon">⚔️</text>
+              <text class="turret-name">炮台 {{index + 1}}</text>
+            </view>
+            <view class="turret-details">
+              <view class="detail-item">
+                <text class="detail-label">攻击力</text>
+                <text class="detail-value">{{item.damage}}</text>
+              </view>
+              <view class="detail-item">
+                <text class="detail-label">目标数</text>
+                <text class="detail-value">{{item.targets}}</text>
+              </view>
+              <view class="detail-item">
+                <text class="detail-label">攻速</text>
+                <text class="detail-value attack-speed">{{item.attackInterval}}ms</text>
+              </view>
+            </view>
+          </view>
         </view>
-      </view>
-      <view class="exp-bar">
-        <view class="exp-fill" style="width: {{experience/nextLevelExp*100}}%"></view>
       </view>
     </view>
 
@@ -184,7 +245,8 @@
           <view>击败怪物: {{defeatedMonsters}}</view>
           <view>到达波次: {{currentWave}}</view>
         </view>
-        <button class="restart-btn" bindtap="restartExperiment">重新开始</button>
+        <view class="game-over-tip">游戏已结束，请停止实验后查看历史记录</view>
+        <button class="game-over-btn" bindtap="stopExperiment">停止实验</button>
       </view>
     </view>
   </view>

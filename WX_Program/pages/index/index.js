@@ -1,4 +1,5 @@
 const app = getApp();
+const audioManager = require('../../utils/audioManager');
 
 // ========== URL 配置（自动切换开发工具/真机调试）==========
 // 开发工具使用内网穿透
@@ -106,12 +107,34 @@ Page({
     
     // UI控制
     showDataPanel: false,  // 侧边数据面板显示状态
-    showStartCover: true   // 启动封面显示状态
+    showStartCover: true,  // 启动封面显示状态
+    gameBackground: '',    // 游戏背景图片路径
+    showGameStats: true,   // 游戏顶部信息栏显示状态
+    showTurretPanel: true, // 炮台信息面板显示状态
+    
+    // 音效控制
+    soundEnabled: true,    // 音效开关
+    bgmEnabled: true,      // BGM开关
+    
+    // 游戏图片资源
+    gameImages: {
+      monsters: [],      // 普通怪物图片列表
+      bosses: [],        // Boss怪物图片列表
+      turrets: [],       // 炮塔图片列表
+      bullets: [],       // 炮弹图片列表
+      background: ''     // 游戏背景图片
+    }
   },
 
   onLoad: function() {
     this.initEmptyChart();
     this.connectWebSocket(); // 初始化WebSocket连接
+    this.loadGameImages();    // 加载游戏图片资源
+    
+    // ========== 播放主界面BGM（预留） ==========
+    // 请添加 /audio/main_bgm.mp3 文件后取消注释
+    // audioManager.playBGM('main_bgm', 'ADHD训练 - 主界面');
+    // ==========================================
     
     // 蓝牙连接监听
     wx.onBLEConnectionStateChange(res => {
@@ -128,6 +151,9 @@ Page({
   onUnload: function() {
     // 页面卸载时关闭WebSocket
     this.closeWebSocket();
+    
+    // 停止所有音频
+    audioManager.stopBGM();
     
     // 清除数据状态检查定时器
     if (this.data.dataCheckTimer) {
@@ -152,14 +178,12 @@ Page({
     
     // 如果正在重连中且已有连接对象，不要重复发起
     if (that.data.isReconnecting && socketTask) {
-      console.log('⏳ 正在重连中，跳过重复连接请求');
       return;
     }
     
     // 如果已经有连接，先彻底清理
     if (socketTask) {
       try {
-        console.log('🧹 清理旧的WebSocket连接');
         socketTask.close({
           code: 1000,
           reason: '主动关闭以重新连接'
@@ -176,8 +200,8 @@ Page({
     // 标记正在连接
     that.setData({ isReconnecting: true });
     
-    // 创建WebSocket连接（自动选择开发工具/真机调试URL）
-    console.log(`🔌 正在连接WebSocket (尝试 ${that.data.reconnectAttempts + 1}/${that.data.maxReconnectAttempts}):`, WS_URL);
+    // 创建WebSocket连接
+    console.log(`🔌 连接服务器 (${that.data.reconnectAttempts + 1}/${that.data.maxReconnectAttempts})`);
     
     // ⚠️ 关键修改：先创建局部变量，绑定事件后再赋值给全局变量
     const newSocket = wx.connectSocket({
@@ -191,7 +215,7 @@ Page({
     
     // 监听WebSocket打开
     newSocket.onOpen(() => {
-      console.log('✅ WebSocket连接已建立');
+      console.log('✅ 服务器已连接');
       
       // 先不更新连接状态，等注册成功后再更新
       that.setData({ 
@@ -205,11 +229,8 @@ Page({
         that.setData({ reconnectTimer: null });
       }
       
-      // 连接成功后立即注册用户（注册成功后才标记为已连接）
-      console.log('🔄 开始获取用户ID并注册...');
+      // 连接成功后立即注册用户
       that.getUserId().then((user_id) => {
-        console.log('✅ 用户ID获取成功:', user_id);
-        console.log('📤 发送注册消息...');
         
         // 使用newSocket发送消息
         newSocket.send({
@@ -218,7 +239,6 @@ Page({
             userId: user_id
           }),
           success: () => {
-            console.log('✅ 用户注册消息已发送，等待确认...');
             
             // 设置注册超时检查（5秒内未收到确认则重连）
             const registerTimeout = setTimeout(() => {
@@ -287,7 +307,6 @@ Page({
     
     // 监听WebSocket关闭
     newSocket.onClose((res) => {
-      console.log('❌ WebSocket已关闭, 关闭码:', res.code);
       
       // 清除注册超时定时器
       if (that.data.registerTimeout) {
@@ -308,16 +327,12 @@ Page({
       
       // 自动触发重连（除非是正常关闭）
       if (res.code !== 1000) {
-        console.log('🔄 非正常关闭，触发重连');
         that.scheduleReconnect();
-      } else {
-        console.log('✅ 正常关闭，不重连');
       }
     });
     
     // ✅ 所有事件监听器绑定完成后，赋值给全局变量
     socketTask = newSocket;
-    console.log('✅ WebSocket对象已创建并绑定事件');
   },
   
   // 调度重连（使用指数退避策略）
@@ -326,19 +341,16 @@ Page({
     
     // 如果已经有重连定时器在运行，不要重复创建
     if (that.data.reconnectTimer) {
-      console.log('⏳ 已有重连任务在执行中');
       return;
     }
     
     // 如果已经连接成功，不需要重连
     if (that.data.socketConnected) {
-      console.log('✅ 已连接，取消重连');
       return;
     }
     
     // 检查是否超过最大重连次数
     if (that.data.reconnectAttempts >= that.data.maxReconnectAttempts) {
-      console.error('❌ 已达到最大重连次数，停止重连');
       wx.showModal({
         title: '连接失败',
         content: '无法连接到服务器，请检查网络后重启小程序',
@@ -350,15 +362,12 @@ Page({
     // 计算退避时间：1秒、2秒、4秒、8秒...最大30秒
     const backoffTime = Math.min(1000 * Math.pow(2, that.data.reconnectAttempts), 30000);
     
-    console.log(`⏰ 将在 ${backoffTime/1000} 秒后重连 (第 ${that.data.reconnectAttempts + 1} 次)`);
-    
     const timer = setTimeout(() => {
       that.setData({ 
         reconnectTimer: null,
         reconnectAttempts: that.data.reconnectAttempts + 1
       });
       
-      console.log('🔄 开始第', that.data.reconnectAttempts, '次重连');
       that.connectWebSocket();
     }, backoffTime);
     
@@ -433,8 +442,7 @@ Page({
     
     // 处理注册确认
     if (data.event === 'registered') {
-      console.log('✅ 用户注册成功:', data.message);
-      console.log('📌 用户ID:', data.userId);
+      console.log('✅ 用户注册成功');
       
       // 清除注册超时定时器
       if (this.data.registerTimeout) {
@@ -451,11 +459,6 @@ Page({
         icon: 'success',
         duration: 2000
       });
-      
-      console.log('✅ WebSocket已完全就绪，可以接收数据');
-      console.log('💡 提示：需要连接蓝牙设备并点击"发送数据"才能开始接收TBR');
-      console.log('💡 当前设备连接状态:', this.data.connected ? '已连接' : '未连接');
-      console.log('💡 当前数据发送状态:', this.data.isDataSending ? '发送中' : '未发送');
     }
     // 处理EEG特征值推送（不打印日志，直接处理）
     else if (data.event === 'eeg_feature' || data.TBR !== undefined) {
@@ -463,7 +466,7 @@ Page({
     }
     // 处理连接确认
     else if (data.event === 'connected') {
-      console.log('🔗 服务器连接确认:', data.message);
+      // 静默处理
     }
     // 处理心跳响应（不打印，避免刷屏）
     else if (data.event === 'pong') {
@@ -492,13 +495,15 @@ Page({
     if (phase === '基准阶段') {
       this.data.baselineTbrList.push(tbrValue);
       
-    } else if (phase === '治疗阶段') {
+    } else if (phase === '治疗阶段' || this.data.currentPhase === '治疗阶段') {
       // 治疗阶段：额外更新当前注意力并判断经验值
+      // 修复：使用本地 currentPhase 作为备用判断，防止服务器 Step 字段缺失
       this.setData({
         currentAttention: tbrSnap
       });
       
       // 每次收到推送时，立即判断是否增加经验值
+      // 游戏结束后不再增加经验值
       if (!this.data.gameOver && this.data.baselineValue != null) {
         if (tbrSnap > this.data.baselineValue) {
           this.gainExperience(GAME_CONFIG.experience.gainRate);
@@ -525,6 +530,8 @@ Page({
 
   // 开始实验
   startExperiment: function() {
+    audioManager.playSound('button_click');
+    
     if (!this.data.connected) {
       wx.showToast({ title: '请先连接设备', icon: 'none' });
       return;
@@ -558,6 +565,8 @@ Page({
   },
   
   stopExperiment: function() {
+    audioManager.playSound('button_click');  // 添加按钮音效
+    
     // 如果游戏已开始，保存游戏时长记录
     if (this.data.gameStarted && this.data.survivedTime > 0) {
       this.saveGameRecord(this.data.survivedTime);
@@ -596,7 +605,8 @@ Page({
       turretAttackTimer: null,
       difficultyTimer: null,
       baselineSum: 0,
-      baselineCount: 0
+      baselineCount: 0,
+      showStartCover: true  // 恢复启动封面显示
     });
   },
 
@@ -611,9 +621,7 @@ Page({
           gameTime: gameTime
         },
         success: (res) => {
-          if (res.data.success) {
-            console.log('[游戏记录] 保存成功，时长:', gameTime, '秒');
-          } else {
+          if (!res.data.success) {
             console.error('[游戏记录] 保存失败:', res.data.error);
           }
         },
@@ -680,6 +688,10 @@ Page({
       survivedTime: 0
     });
 
+    // ========== 切换到游戏BGM（正式启用） ==========
+    audioManager.playBGM('game_bgm', 'ADHD训练 - 游戏中');
+    // ==========================================
+
     // 初始化游戏
     this.initGame();
 
@@ -711,6 +723,8 @@ Page({
   },
 
   restartExperiment: function() {
+    audioManager.playSound('button_click');  // 添加按钮音效
+    
     this.stopExperiment();
     this.resetChart();
     this.setData({
@@ -748,8 +762,12 @@ Page({
   
   // 初始化游戏
   initGame: function() {
+    // 设置游戏背景图片
+    const backgroundImage = this.getBackgroundImage();
+    
     // 重置游戏状态
     this.setData({
+      gameBackground: backgroundImage,  // 设置背景图片
       town: {
         x: GAME_CONFIG.town.x,
         y: GAME_CONFIG.town.y,
@@ -776,15 +794,25 @@ Page({
 
   // 创建初始炮台
   createInitialTurret: function() {
+    // 初始化炮台（只有1个）- 六边形分布的第一个位置（正上方）
+    const turretImage = this.getRandomTurretImage();
+    const bulletImage = this.getRandomBulletImage();
+    
+    const radius = 100; // 炮台距离小镇中心的半径
+    const angle = -90 * Math.PI / 180; // 第一个炮台在正上方（-90度）
+    
     const turret = {
       id: Date.now(),
-      x: GAME_CONFIG.town.x,
-      y: GAME_CONFIG.town.y - 60,
+      x: GAME_CONFIG.town.x + Math.cos(angle) * radius,
+      y: GAME_CONFIG.town.y + Math.sin(angle) * radius,
       rotation: 0,
       lastAttackTime: 0,
       damage: GAME_CONFIG.turret.initialDamage,
       attackInterval: GAME_CONFIG.turret.attackInterval,
-      targets: 1 // 可攻击目标数
+      targets: 1, // 可攻击目标数
+      image: turretImage,  // 炮台图片
+      bulletImage: bulletImage,  // 为这个炮台固定分配子弹图片
+      positionIndex: 0  // 标记这是第几个位置（用于六边形分布）
     };
     this.setData({
       turrets: [turret]
@@ -836,6 +864,9 @@ Page({
     const baseAtk = GAME_CONFIG.difficulty.monsterAtkProgression(this.data.currentWave);
     const baseSpeed = GAME_CONFIG.difficulty.moveSpeedProgression(this.data.currentWave);
     
+    // 随机选择怪物图片
+    const monsterImage = isBoss ? this.getRandomBossImage() : this.getRandomMonsterImage();
+    
     const monster = {
       id: Date.now() + Math.random(),
       x: zone.x + Math.random() * zone.width,
@@ -847,7 +878,8 @@ Page({
       lastAttackTime: 0,
       targetX: this.data.town.x,
       targetY: this.data.town.y,
-      isBoss: isBoss
+      isBoss: isBoss,
+      image: monsterImage  // 添加图片路径
     };
 
     const monsters = [...this.data.monsters, monster];
@@ -903,6 +935,7 @@ Page({
     const turrets = this.data.turrets;
     const monsters = this.data.monsters;
     const bullets = [...this.data.bullets];
+    const targetedMonsters = new Set(); // 记录已被锁定的怪物，避免重复攻击
 
     turrets.forEach(turret => {
       // 寻找攻击范围内的怪物
@@ -913,18 +946,48 @@ Page({
           const distance = Math.sqrt(dx * dx + dy * dy);
           return distance <= GAME_CONFIG.turret.range;
         })
+        .map(monster => {
+          // 计算每个怪物距离该炮台的距离
+          const dx = monster.x - turret.x;
+          const dy = monster.y - turret.y;
+          const distanceToTurret = Math.sqrt(dx * dx + dy * dy);
+          return { monster, distanceToTurret };
+        })
         .sort((a, b) => {
-          // 按距离小镇的距离排序，优先攻击最近小镇的怪物
-          const distA = Math.sqrt((a.x - this.data.town.x) ** 2 + (a.y - this.data.town.y) ** 2);
-          const distB = Math.sqrt((b.x - this.data.town.x) ** 2 + (b.y - this.data.town.y) ** 2);
-          return distA - distB;
+          // 优先攻击距离该炮台最近的怪物
+          return a.distanceToTurret - b.distanceToTurret;
         });
 
       // 攻击目标（根据炮台自己的目标数决定攻击数量）
       const targetCount = Math.min(turret.targets || 1, targetsInRange.length);
       for (let i = 0; i < targetCount; i++) {
-        const target = targetsInRange[i];
-        this.fireBullet(turret, target, bullets);
+        const targetData = targetsInRange[i];
+        if (!targetData) break;
+        
+        const target = targetData.monster;
+        
+        // 如果该怪物已被其他炮台锁定，尝试找下一个目标（除非没有其他选择）
+        if (targetedMonsters.has(target.id) && i < targetsInRange.length - 1) {
+          // 寻找未被锁定的下一个目标
+          let foundAlternative = false;
+          for (let j = i + 1; j < targetsInRange.length; j++) {
+            const altTarget = targetsInRange[j].monster;
+            if (!targetedMonsters.has(altTarget.id)) {
+              this.fireBullet(turret, altTarget, bullets);
+              targetedMonsters.add(altTarget.id);
+              foundAlternative = true;
+              break;
+            }
+          }
+          if (!foundAlternative) {
+            // 没有其他选择，还是攻击这个已被锁定的目标
+            this.fireBullet(turret, target, bullets);
+          }
+        } else {
+          // 攻击该目标
+          this.fireBullet(turret, target, bullets);
+          targetedMonsters.add(target.id);
+        }
       }
     });
 
@@ -933,6 +996,9 @@ Page({
 
   // 发射子弹
   fireBullet: function(turret, target, bullets) {
+    // 播放射击音效
+    audioManager.playSound('turret_shoot');
+    
     const bullet = {
       id: Date.now() + Math.random(),
       x: turret.x,
@@ -940,7 +1006,8 @@ Page({
       targetId: target.id,
       targetX: target.x,
       targetY: target.y,
-      damage: turret.damage || GAME_CONFIG.turret.initialDamage
+      damage: turret.damage || GAME_CONFIG.turret.initialDamage,
+      image: turret.bulletImage  // 使用炮台绑定的子弹图片（不再随机）
     };
     bullets.push(bullet);
   },
@@ -971,6 +1038,8 @@ Page({
 
   // 升级处理
   levelUp: function(newLevel) {
+    // 升级音效已移除（精简版）
+    
     if (newLevel <= 6) {
       // 1-6级：增加炮台数量
       this.addTurret();
@@ -994,24 +1063,44 @@ Page({
     // 随机选择一个炮台
     const randomIndex = Math.floor(Math.random() * turrets.length);
     
-    // 随机选择升级类型：0=攻击速度，1=攻击力
-    const upgradeType = Math.random() < 0.5 ? 0 : 1;
+    // 随机选择升级类型：0=攻击力，1=攻击目标数量，2=攻击速度
+    const upgradeType = Math.floor(Math.random() * 3);
     
     const upgradedTurrets = turrets.map((turret, index) => {
       if (index === randomIndex) {
         if (upgradeType === 0) {
-          // 升级攻击速度
-          turret.attackInterval = Math.max(500, turret.attackInterval - 200);
-          wx.showToast({
-            title: `炮台${index + 1}攻击速度提升！`,
-            icon: 'success',
-            duration: 1500
-          });
-        } else {
           // 升级攻击力
           turret.damage = (turret.damage || GAME_CONFIG.turret.initialDamage) + 1;
           wx.showToast({
             title: `炮台${index + 1}攻击力+1！`,
+            icon: 'success',
+            duration: 1500
+          });
+        } else if (upgradeType === 1) {
+          // 升级攻击目标数量（最多同时攻击3个目标）
+          const currentTargets = turret.targets || 1;
+          if (currentTargets < 3) {
+            turret.targets = currentTargets + 1;
+            wx.showToast({
+              title: `炮台${index + 1}可攻击${turret.targets}个目标！`,
+              icon: 'success',
+              duration: 1500
+            });
+          } else {
+            // 如果已经达到最大目标数，改为提升攻击力
+            turret.damage = (turret.damage || GAME_CONFIG.turret.initialDamage) + 1;
+            wx.showToast({
+              title: `炮台${index + 1}攻击力+1！`,
+              icon: 'success',
+              duration: 1500
+            });
+          }
+        } else {
+          // 升级攻击速度（减少攻击间隔，最低500ms）
+          const currentInterval = turret.attackInterval || GAME_CONFIG.turret.attackInterval;
+          turret.attackInterval = Math.max(500, currentInterval - 200);
+          wx.showToast({
+            title: `炮台${index + 1}攻击速度提升！`,
             icon: 'success',
             duration: 1500
           });
@@ -1029,9 +1118,13 @@ Page({
     const turretCount = turrets.length;
     
     if (turretCount < GAME_CONFIG.turret.maxCount) {
-      // 围绕小镇放置炮台
-      const angle = (turretCount * 60) * Math.PI / 180; // 每60度一个炮台
-      const radius = 100;
+      // 六边形均匀分布：从正上方开始，每60度一个炮台
+      // 位置索引：0=上(-90°), 1=右上(30°), 2=右下(90°), 3=下(150°), 4=左下(210°), 5=左上(270°)
+      const angle = (-90 + turretCount * 60) * Math.PI / 180; // 从-90度开始，顺时针每60度
+      const radius = 100; // 炮台距离小镇中心的半径
+      const turretImage = this.getRandomTurretImage();
+      const bulletImage = this.getRandomBulletImage();
+      
       const turret = {
         id: Date.now() + turretCount,
         x: this.data.town.x + Math.cos(angle) * radius,
@@ -1040,7 +1133,10 @@ Page({
         lastAttackTime: 0,
         damage: GAME_CONFIG.turret.initialDamage,
         attackInterval: GAME_CONFIG.turret.attackInterval,
-        targets: 1
+        targets: 1,
+        image: turretImage,  // 添加炮台图片
+        bulletImage: bulletImage,  // 为新炮台分配子弹图片
+        positionIndex: turretCount  // 记录位置索引
       };
       turrets.push(turret);
       this.setData({ turrets });
@@ -1146,6 +1242,8 @@ Page({
 
   // 怪物攻击小镇
   monsterAttackTown: function(monster) {
+    // 小镇受伤音效已移除（精简版）
+    
     const town = { ...this.data.town };
     const damage = monster.atk || GAME_CONFIG.monster.attackDamage;
     town.hp = Math.max(0, town.hp - damage);
@@ -1157,10 +1255,13 @@ Page({
 
   // 子弹击中怪物
   hitMonster: function(monsterId, damage, x, y) {
+    // 子弹击中和怪物死亡音效已移除（精简版）
+    
     const monsters = this.data.monsters.map(monster => {
       if (monster.id === monsterId) {
         monster.hp -= damage;
         if (monster.hp <= 0) {
+          // 怪物死亡
           this.setData({
             defeatedMonsters: this.data.defeatedMonsters + 1
           });
@@ -1176,6 +1277,9 @@ Page({
 
   // 创建爆炸特效
   createExplosion: function(x, y) {
+    // 播放爆炸音效
+    audioManager.playSound('explosion');
+    
     const explosion = {
       id: Date.now() + Math.random(),
       x: x,
@@ -1205,6 +1309,9 @@ Page({
 
   // 结束游戏
   endGame: function() {
+    // 播放游戏结束音效
+    audioManager.playSound('game_over');
+    
     // 清除所有定时器
     if (this.data.gameTimer) clearInterval(this.data.gameTimer);
     if (this.data.monsterSpawnTimer) clearInterval(this.data.monsterSpawnTimer);
@@ -1217,6 +1324,11 @@ Page({
       gameOver: true,
       gameStarted: false
     });
+    
+    // 保存游戏记录（生存时间）
+    if (this.data.survivedTime > 0) {
+      this.saveGameRecord(this.data.survivedTime);
+    }
   },
 
 
@@ -1291,6 +1403,11 @@ Page({
   },
 
   onShow() {
+    // 每次显示页面时，如果没有正在进行的实验，显示启动封面
+    if (!this.data.experimentStarted) {
+      this.setData({ showStartCover: true });
+    }
+    
     if (app.globalData.connectedDevice) {
       this.setData({
         connected: true,
@@ -1305,20 +1422,40 @@ Page({
   },
   
   navigateToHistory: function() {
+    audioManager.playSound('button_click');
     wx.navigateTo({ url: '/pages/history/history' });
   },
 
   navigateToGameRecords: function() {
+    audioManager.playSound('button_click');
     wx.navigateTo({ url: '/pages/gameRecords/gameRecords' });
   },
 
   navigateToSchulte: function() {
+    audioManager.playSound('button_click');
     wx.navigateTo({ url: '/pages/schulte/schulte' });
   },
 
   toggleDataPanel: function() {
+    audioManager.playSound('button_click');
     this.setData({
       showDataPanel: !this.data.showDataPanel
+    });
+  },
+
+  // 切换游戏顶部信息栏显示
+  toggleGameStats: function() {
+    audioManager.playSound('button_click');
+    this.setData({
+      showGameStats: !this.data.showGameStats
+    });
+  },
+
+  // 切换炮台信息面板显示
+  toggleTurretPanel: function() {
+    audioManager.playSound('button_click');
+    this.setData({
+      showTurretPanel: !this.data.showTurretPanel
     });
   },
   
@@ -1440,6 +1577,8 @@ Page({
 
   // 切换数据发送状态
   toggleDataSending: function() {
+    audioManager.playSound('button_click');  // 添加按钮音效
+    
     if (!this.data.connected) {
       wx.showToast({ 
         title: '请先连接设备', 
@@ -1478,6 +1617,35 @@ Page({
     });
   },
 
+  // 切换音效开关
+  toggleSound: function() {
+    const enabled = audioManager.toggleSound();
+    this.setData({ soundEnabled: enabled });
+    
+    // 播放音效测试（只在开启时）
+    if (enabled) {
+      audioManager.playSound('button_click');
+    }
+    
+    wx.showToast({
+      title: enabled ? '音效已开启' : '音效已关闭',
+      icon: 'success',
+      duration: 1000
+    });
+  },
+
+  // 切换BGM开关
+  toggleBGM: function() {
+    const enabled = audioManager.toggleBGM();
+    this.setData({ bgmEnabled: enabled });
+    
+    wx.showToast({
+      title: enabled ? 'BGM已开启' : 'BGM已关闭',
+      icon: 'success',
+      duration: 1000
+    });
+  },
+
   // 处理输入框数据（已废弃）
   handleInput(e) {
     // 该函数已废弃，输入框已移除
@@ -1490,6 +1658,89 @@ Page({
       return parseInt(h, 16);
     }));
     return typedArray.buffer;
+  },
+
+  // ========== 游戏图片资源加载 ==========
+  
+  // 加载游戏图片资源
+  loadGameImages: function() {
+    const fs = wx.getFileSystemManager();
+    const basePath = `${wx.env.USER_DATA_PATH}/../../../images/game`;
+    
+    // 注意：小程序无法直接枚举文件，需要预定义图片文件名
+    // 这里使用一个简单的方法：尝试加载固定命名的图片
+    const gameImages = {
+      monsters: [],
+      bosses: [],
+      turrets: [],
+      bullets: [],
+      background: ''
+    };
+    
+    // 根据你的实际图片数量加载
+    // 怪物图片: monster1.png ~ monster4.png
+    for (let i = 1; i <= 4; i++) {
+      const path = `/images/game/monsters/monster${i}.png`;
+      gameImages.monsters.push(path);
+    }
+    
+    // Boss图片: boss1.png ~ boss4.png
+    for (let i = 1; i <= 4; i++) {
+      const path = `/images/game/monsters/boss${i}.png`;
+      gameImages.bosses.push(path);
+    }
+    
+    // 炮塔图片: turret1.png ~ turret5.png
+    for (let i = 1; i <= 5; i++) {
+      const path = `/images/game/turrets/turret${i}.png`;
+      gameImages.turrets.push(path);
+    }
+    
+    // 炮弹图片: bullet1.png ~ bullet6.png
+    for (let i = 1; i <= 6; i++) {
+      const path = `/images/game/bullets/bullet${i}.png`;
+      gameImages.bullets.push(path);
+    }
+    
+    // 加载背景图片（只加载第一张）
+    gameImages.background = '/images/game/backgrounds/background.png';
+    
+    this.setData({ gameImages });
+  },
+  
+  // 从列表中随机选择一张图片
+  getRandomImage: function(imageList) {
+    if (!imageList || imageList.length === 0) {
+      return null;
+    }
+    const randomIndex = Math.floor(Math.random() * imageList.length);
+    const selectedImage = imageList[randomIndex];
+    return selectedImage;
+  },
+  
+  // 获取随机怪物图片（如果没有图片则返回null，使用emoji）
+  getRandomMonsterImage: function() {
+    return this.getRandomImage(this.data.gameImages.monsters);
+  },
+  
+  // 获取随机Boss图片
+  getRandomBossImage: function() {
+    return this.getRandomImage(this.data.gameImages.bosses);
+  },
+  
+  // 获取随机炮塔图片
+  getRandomTurretImage: function() {
+    return this.getRandomImage(this.data.gameImages.turrets);
+  },
+  
+  // 获取随机炮弹图片
+  getRandomBulletImage: function() {
+    return this.getRandomImage(this.data.gameImages.bullets);
+  },
+  
+  // 获取游戏背景图片
+  getBackgroundImage: function() {
+    return this.data.gameImages.background || '';
   },
 
   // 初始化空白图表
@@ -1658,6 +1909,8 @@ Page({
 
   // 手动结束游戏
   endGameManually: function() {
+    audioManager.playSound('button_click');  // 添加按钮音效
+    
     if (!this.data.gameStarted || this.data.gameOver) return;
     
     wx.showModal({
