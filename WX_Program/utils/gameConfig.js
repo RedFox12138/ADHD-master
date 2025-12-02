@@ -21,7 +21,7 @@ module.exports = {
   monster: {
     baseSpawnInterval: 3000,  // 基础怪物生成间隔(ms) - 从4500降低到3000，加快生成
     initialHp: 1,         // 前期怪物血量
-    moveSpeed: 1.5,       // 怪物移动速度(rpx/frame) - 从1.0提升到1.5，移动更快
+    moveSpeed: 2.5,       // 怪物移动速度(rpx/frame) - 提升到2.5，增加难度
     attackDamage: 1,      // 怪物攻击力 - 保持为1
     attackInterval: 6000, // 怪物攻击间隔(ms) - 保持6000
     attackRange: 60,      // 怪物攻击范围(rpx)
@@ -65,7 +65,7 @@ module.exports = {
     // 怪物生成速度递增（间隔减少，最低1500）
     spawnSpeedProgression: (wave) => Math.max(1500, 3000 - wave * 60),
     // 怪物移动速度递增
-    moveSpeedProgression: (wave) => 1.5 + wave * 0.05,
+    moveSpeedProgression: (wave) => 2.5 + wave * 0.08,
     // 每波生成的怪物数量基数（起始1只，上限3只）
     monstersPerWave: (wave) => Math.min(1 + Math.floor(wave / 5), 3)
   },

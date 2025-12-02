@@ -123,10 +123,23 @@ Page({
       turrets: [],       // 炮塔图片列表
       bullets: [],       // 炮弹图片列表
       background: ''     // 游戏背景图片
-    }
+    },
+    
+    // 屏幕适配相关
+    statusBarHeight: 0,    // 状态栏高度
+    screenHeight: 0,       // 屏幕高度
+    safeAreaInsets: {      // 安全区域
+      top: 0,
+      bottom: 0
+    },
+    toolbarHeight: 88,     // 工具栏高度（rpx）
+    gameContainerHeight: 0 // 游戏容器实际高度
   },
 
   onLoad: function() {
+    // 获取系统信息进行屏幕适配
+    this.initSystemInfo();
+    
     this.initEmptyChart();
     this.connectWebSocket(); // 初始化WebSocket连接
     this.loadGameImages();    // 加载游戏图片资源
@@ -145,6 +158,47 @@ Page({
           this.stopExperiment();
         }
       }
+    });
+  },
+  
+  // 初始化系统信息，获取屏幕尺寸和安全区域
+  initSystemInfo: function() {
+    const systemInfo = wx.getSystemInfoSync();
+    const statusBarHeight = systemInfo.statusBarHeight || 0;
+    const screenHeight = systemInfo.screenHeight;
+    const safeArea = systemInfo.safeArea || {};
+    
+    // 计算安全区域的上下边距
+    const safeAreaInsets = {
+      top: safeArea.top || statusBarHeight,
+      bottom: screenHeight - (safeArea.bottom || screenHeight)
+    };
+    
+    // 将px转换为rpx (1px = 2rpx on iPhone 6/7/8)
+    const pixelRatio = 750 / systemInfo.windowWidth;
+    const statusBarHeightRpx = statusBarHeight * pixelRatio;
+    const toolbarHeight = 88; // 工具栏固定高度
+    const screenHeightRpx = screenHeight * pixelRatio;
+    const safeAreaBottomRpx = safeAreaInsets.bottom * pixelRatio;
+    
+    // 计算游戏容器实际可用高度（屏幕高度 - 状态栏 - 工具栏 - 底部安全区域）
+    const gameContainerHeight = screenHeightRpx - statusBarHeightRpx - toolbarHeight - safeAreaBottomRpx;
+    
+    this.setData({
+      statusBarHeight: statusBarHeightRpx,
+      screenHeight: screenHeightRpx,
+      safeAreaInsets: {
+        top: safeAreaInsets.top * pixelRatio,
+        bottom: safeAreaBottomRpx
+      },
+      gameContainerHeight: gameContainerHeight
+    });
+    
+    console.log('屏幕适配信息:', {
+      statusBarHeight: statusBarHeightRpx,
+      screenHeight: screenHeightRpx,
+      safeAreaInsets: this.data.safeAreaInsets,
+      gameContainerHeight: gameContainerHeight
     });
   },
 
@@ -567,6 +621,9 @@ Page({
   stopExperiment: function() {
     audioManager.playSound('button_click');  // 添加按钮音效
     
+    // 停止游戏BGM
+    audioManager.stopBGM();
+    
     // 如果游戏已开始，保存游戏时长记录
     if (this.data.gameStarted && this.data.survivedTime > 0) {
       this.saveGameRecord(this.data.survivedTime);
@@ -648,7 +705,7 @@ Page({
         if (that.data.currentPhase === '准备阶段') {
           that.setData({
             currentPhase: '基准阶段',
-            remainingTime: 30
+            remainingTime: 2
           });
           that.startPhaseTimer();
         }
@@ -1309,6 +1366,9 @@ Page({
 
   // 结束游戏
   endGame: function() {
+    // 停止游戏BGM
+    audioManager.stopBGM();
+    
     // 播放游戏结束音效
     audioManager.playSound('game_over');
     
@@ -1920,8 +1980,12 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          // stopExperiment() 内部会保存游戏记录,这里不需要重复保存
-          // 直接调用stopExperiment完全重置到初始状态
+          // 主动结束游戏时，先保存游戏记录
+          if (this.data.survivedTime > 0) {
+            this.saveGameRecord(this.data.survivedTime);
+          }
+          
+          // 然后调用stopExperiment完全重置到初始状态
           this.stopExperiment();
 
           wx.showToast({

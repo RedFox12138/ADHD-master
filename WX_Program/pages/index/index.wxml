@@ -80,7 +80,9 @@
   </view>
 
   <!-- 保卫小镇游戏界面 -->
-  <view class="game-container" wx:if="{{currentPhase === '治疗阶段'}}"
+  <view class="game-container" 
+        style="top: {{statusBarHeight + toolbarHeight}}rpx; height: {{gameContainerHeight}}rpx;"
+        wx:if="{{currentPhase === '治疗阶段'}}"
         catchtouchmove="preventPageScroll"
         bindtouchstart="onMapTouchStart"
         bindtouchmove="onMapTouchMove"

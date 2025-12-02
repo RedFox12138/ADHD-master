@@ -12,12 +12,12 @@ font_sizes.subtitle = 16;     % 子图标题字体大小
 font_sizes.sub_axis_label = 14; % 子图坐标轴标签字体大小
 
 % --- 用户需要设定的参数 ---
-target_file = 'D:\Pycharm_Projects\ADHD-master\data\额头信号去眼电\1014 XY额头躲避游戏2_processed.txt'; 
+target_file = 'D:\Pycharm_Projects\ADHD-master\data\额头信号去眼电\1202 XY额头躲避游戏2_processed.txt'; 
 Fs = 250; % 采样率 (Hz)
 
 % 定义两个时间段
 time_periods.names = {'静息', '刺激'};
-time_periods.ranges = {[10, 70], [85, 140]};
+time_periods.ranges = {[10, 70], [82, 140]};
 time_periods.var_names = {'Resting', 'Calculate'};
 time_periods.colors = {'b', 'r'};
 

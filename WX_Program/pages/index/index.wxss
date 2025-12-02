@@ -75,6 +75,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 30rpx;
+  padding-top: env(safe-area-inset-top);
   z-index: 1000;
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.3);
 }
@@ -225,6 +226,8 @@
 .bottom-action-bar {
   position: fixed;
   bottom: 60rpx;
+  /* 为底部安全区域添加额外的底部边距 */
+  padding-bottom: env(safe-area-inset-bottom);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -594,10 +597,9 @@
 /* ========== 保卫小镇游戏界面 - 全屏游戏模式 ========== */
 .game-container {
   position: fixed;
-  top: 88rpx;
+  /* top 和 height 将通过 inline style 动态设置 */
   left: 0;
   right: 0;
-  bottom: 0;
   overflow: hidden;
   background: linear-gradient(135deg, #2e7d32 0%, #66bb6a 50%, #1b5e20 100%);
   z-index: 100;
@@ -1018,8 +1020,8 @@
 /* 结束游戏按钮 */
 .end-game-btn {
   position: absolute;
-  bottom: 30rpx;
-  right: 30rpx;
+  top: 30rpx;
+  left: 30rpx;
   background: rgba(244, 67, 54, 0.9);
   color: white;
   padding: 20rpx 40rpx;
@@ -1041,22 +1043,26 @@
 /* 炮台信息面板 - 左下角 */
 .turret-panel {
   position: absolute;
-  bottom: 30rpx;
-  left: 20rpx;
+  top: 100rpx;
+  left: 0;
   max-width: 320rpx;
+  width: 280rpx;
   background: rgba(33, 150, 243, 0.85);
-  border-radius: 16rpx;
-  padding: 20rpx;
+  border-radius: 0 16rpx 16rpx 0;
+  padding: 24rpx;
   padding-right: 70rpx;  /* 为按钮留出空间 */
   z-index: 10;
   backdrop-filter: blur(10rpx);
-  box-shadow: 0 8rpx 24rpx rgba(33, 150, 243, 0.3);
+  box-shadow: 8rpx 0 24rpx rgba(33, 150, 243, 0.3);
   transition: all 0.3s ease;
+  max-height: 600rpx;
+  overflow-y: auto;
 }
 
 .turret-panel.turret-panel-collapsed {
   padding: 0;
   background: rgba(33, 150, 243, 0.7);
+  width: 60rpx;
   max-width: 60rpx;
   min-width: 60rpx;
   overflow: visible;  /* 确保按钮可见 */
@@ -1065,7 +1071,7 @@
 .turret-toggle {
   position: absolute;
   right: 10rpx;
-  top: 10rpx;
+  top: 20rpx;
   width: 50rpx;
   height: 50rpx;
   display: flex;
@@ -1081,7 +1087,7 @@
 
 .turret-panel-collapsed .turret-toggle {
   right: 5rpx;  /* 折叠时居中显示 */
-  top: 5rpx;
+  top: 10rpx;
 }
 
 .turret-toggle:active {

@@ -98,7 +98,7 @@ def batch_process_txt_folder(input_folder, output_folder):
 
 # 使用示例
 if __name__ == "__main__":
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\oksQL7aHWZ0qkXkFP-oC05eZugE8\\额头追踪或躲避游戏'  # 替换为你的txt文件夹路径
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
     output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
 
     batch_process_txt_folder(input_folder, output_folder)

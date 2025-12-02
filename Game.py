@@ -646,7 +646,7 @@ def run_dodge_game_phase(duration=60):
     pygame.quit()
     print("Pygame 游戏阶段结束。")
 
-
+ 
 # 3. 主实验流程 (更新后)
 # ==============================================================================
 def run_experiment():
