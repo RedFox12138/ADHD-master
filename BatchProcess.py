@@ -5,9 +5,7 @@ from matplotlib import pyplot as plt
 from vmdpy import VMD
 
 from PreProcess import preprocess3, preprocess3_fir
-from SingleDenoise import eog_removal, eog_removal_adaptive
 from SingleDenoise_CORRECTED import eog_removal_corrected
-from VmdEEG import eog_removal_vmd
 
 
 def process_txt_file(txt_path, output_folder, fs=250):
@@ -22,11 +20,9 @@ def process_txt_file(txt_path, output_folder, fs=250):
 
     # 对整个信号进行预处理
     processed_signal,_ = preprocess3(data, fs)
-    # processed_signal, _ = preprocess3_fir(data, fs,True)
+
 
     processed_signal = eog_removal_corrected(processed_signal, 250, True)
-    # processed_signal = eog_removal_vmd(processed_signal)
-    # processed_signal= optimized_dwt_eog_removal(processed_signal,visualize=True)
 
 
 
