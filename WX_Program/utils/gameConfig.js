@@ -2,7 +2,7 @@
 module.exports = {
   // 小镇属性
   town: {
-    maxHp: 100,           // 小镇初始血量
+    maxHp: 60,            // 小镇初始血量
     x: 375,               // 小镇X坐标（地图中心：750/2=375，rpx单位）
     y: 500                // 小镇Y坐标（地图中心：1000/2=500，rpx单位）
   },
@@ -19,9 +19,9 @@ module.exports = {
 
   // 怪物属性
   monster: {
-    baseSpawnInterval: 3000,  // 基础怪物生成间隔(ms) - 从4500降低到3000，加快生成
+    baseSpawnInterval: 2000,  // 基础怪物生成间隔(ms) - 加快生成速度
     initialHp: 1,         // 前期怪物血量
-    moveSpeed: 2.5,       // 怪物移动速度(rpx/frame) - 提升到2.5，增加难度
+    moveSpeed: 3.5,       // 怪物移动速度(rpx/frame) - 提升到3.5，加快游戏节奏
     attackDamage: 1,      // 怪物攻击力 - 保持为1
     attackInterval: 6000, // 怪物攻击间隔(ms) - 保持6000
     attackRange: 60,      // 怪物攻击范围(rpx)
@@ -62,10 +62,10 @@ module.exports = {
     monsterHpProgression: (wave) => Math.max(1, 1 + Math.floor(wave * 0.3)),
     // 怪物攻击力递增: 每8波+1
     monsterAtkProgression: (wave) => 1 + Math.floor(wave / 8),
-    // 怪物生成速度递增（间隔减少，最低1500）
-    spawnSpeedProgression: (wave) => Math.max(1500, 3000 - wave * 60),
+    // 怪物生成速度递增（间隔减少，最低1000）
+    spawnSpeedProgression: (wave) => Math.max(1000, 2000 - wave * 80),
     // 怪物移动速度递增
-    moveSpeedProgression: (wave) => 2.5 + wave * 0.08,
+    moveSpeedProgression: (wave) => 3.5 + wave * 0.1,
     // 每波生成的怪物数量基数（起始1只，上限3只）
     monstersPerWave: (wave) => Math.min(1 + Math.floor(wave / 5), 3)
   },

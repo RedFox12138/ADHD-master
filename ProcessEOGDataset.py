@@ -151,8 +151,8 @@ def batch_process_eog_dataset(input_folder, output_file, fs=250, window_duration
 # 使用示例
 if __name__ == "__main__":
     # 配置参数
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 包含mat文件的文件夹
-    output_file = 'D:\\Pycharm_Projects\\ADHD-master\\data\\eog_dataset.mat'  # 输出的数据集文件
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\总和的mat'  # 包含mat文件的文件夹
+    output_file = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\eog_dataset.mat'  # 输出的数据集文件
     
     # 采样率和窗口参数
     fs = 250  # 采样率 250Hz
