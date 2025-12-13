@@ -22,6 +22,120 @@
   animation: fadeIn 0.5s ease-in;
 }
 
+/* 难度选择界面 */
+.difficulty-selector {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  animation: fadeIn 0.3s ease-in;
+  backdrop-filter: blur(10rpx);
+}
+
+.difficulty-modal {
+  width: 640rpx;
+  background: linear-gradient(135deg, #2c3e82 0%, #1a237e 100%);
+  border-radius: 40rpx;
+  padding: 60rpx 40rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100rpx);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.difficulty-title {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 20rpx;
+  text-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.3);
+}
+
+.difficulty-desc {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  margin-bottom: 50rpx;
+}
+
+.difficulty-options {
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+}
+
+.difficulty-option {
+  display: flex;
+  align-items: center;
+  padding: 40rpx 30rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3rpx solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.difficulty-option:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.difficulty-option.easy {
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.difficulty-option.easy:active {
+  background: rgba(76, 175, 80, 0.2);
+}
+
+.difficulty-option.normal {
+  border-color: rgba(33, 150, 243, 0.5);
+}
+
+.difficulty-option.normal:active {
+  background: rgba(33, 150, 243, 0.2);
+}
+
+.difficulty-option.hard {
+  border-color: rgba(244, 67, 54, 0.5);
+}
+
+.difficulty-option.hard:active {
+  background: rgba(244, 67, 54, 0.2);
+}
+
+.difficulty-icon {
+  font-size: 60rpx;
+  margin-right: 30rpx;
+}
+
+.difficulty-name {
+  flex: 1;
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.difficulty-info {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .start-cover::before {
   content: '';
   position: absolute;

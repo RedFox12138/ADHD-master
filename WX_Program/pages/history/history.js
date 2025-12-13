@@ -168,7 +168,8 @@ Page({
                   name: this.formatTime(file),
                   fullName: file,
                   time: this.formatTime(file),
-                  size: '未知大小'
+                  size: '未知大小',
+                  difficulty: res.data.difficulties ? res.data.difficulties[file] : 'normal' // 添加难度信息
                 }))
                 .sort((a, b) => b.name.localeCompare(a.name))
             });
@@ -186,7 +187,8 @@ Page({
   // 从文件名解析时间
   formatTime: function(filename) {
     try {
-      const timePart = filename.split('_')[1];
+      // 文件名格式为 HHMMSS_xxx.txt，提取前6个字符作为时间
+      const timePart = filename.split('_')[0];
       const hh = timePart.substr(0,2);
       const mm = timePart.substr(2,2);
       const ss = timePart.substr(4,2);
@@ -222,7 +224,8 @@ Page({
               chartData: {
                 values: res.data.data,
                 baseline: res.data.baseline !== undefined ? res.data.baseline : null,
-                totalPoints: res.data.totalPoints
+                totalPoints: res.data.totalPoints,
+                difficulty: res.data.difficulty || 'normal' // 添加难度信息，默认普通
               },
               showChart: true,
               loading: false
@@ -347,8 +350,17 @@ Page({
           ctx.fillText(label, x, height - 20);
         }
 
+        // 根据难度设置颜色
+        const difficulty = this.data.chartData.difficulty || 'normal';
+        const difficultyColors = {
+          'easy': '#4caf50',    // 绿色
+          'normal': '#2196f3',  // 蓝色
+          'hard': '#f44336'     // 红色
+        };
+        const lineColor = difficultyColors[difficulty] || difficultyColors['normal'];
+        
         // 绘制数据折线
-        ctx.strokeStyle = '#1aad19';
+        ctx.strokeStyle = lineColor;
         ctx.lineWidth = 2;
         ctx.beginPath();
 
@@ -365,7 +377,7 @@ Page({
         ctx.stroke();
 
         // 绘制数据点
-        ctx.fillStyle = '#1aad19';
+        ctx.fillStyle = lineColor;
         values.forEach((val, idx) => {
           const x = padding.left + (idx / (values.length - 1 || 1)) * chartWidth;
           const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
@@ -488,11 +500,17 @@ Page({
     });
   },
 
-  // 渲染游戏记录图表 - 使用Canvas直接绘制
+  // 渲染游戏记录图表 - 使用Canvas直接绘制（按难度分类）
   renderGameChart: function(records) {
     try {
       // 准备数据（最多显示最近30次）
       const displayRecords = records.length > 30 ? records.slice(-30) : records;
+      
+      // 按难度分组
+      const easyData = displayRecords.filter(r => (r.difficulty || 'normal') === 'easy').map(r => ({ time: r.gameTime, difficulty: 'easy' }));
+      const normalData = displayRecords.filter(r => (r.difficulty || 'normal') === 'normal').map(r => ({ time: r.gameTime, difficulty: 'normal' }));
+      const hardData = displayRecords.filter(r => (r.difficulty || 'normal') === 'hard').map(r => ({ time: r.gameTime, difficulty: 'hard' }));
+      
       const data = displayRecords.map(r => r.gameTime);
 
       if (data.length === 0) {
@@ -552,7 +570,31 @@ Page({
         ctx.fillStyle = '#333333';
         ctx.font = 'bold 16px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('游戏时长趋势', width / 2, 25);
+        ctx.fillText('训练时长趋势图（按难度分类）', width / 2, 25);
+        
+        // 绘制图例
+        const legendY = 50;
+        const legendX = padding.left;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        
+        // 简单难度
+        ctx.fillStyle = '#4caf50';
+        ctx.fillRect(legendX, legendY, 30, 10);
+        ctx.fillStyle = '#333333';
+        ctx.fillText('简单', legendX + 35, legendY + 9);
+        
+        // 普通难度
+        ctx.fillStyle = '#2196f3';
+        ctx.fillRect(legendX + 90, legendY, 30, 10);
+        ctx.fillStyle = '#333333';
+        ctx.fillText('普通', legendX + 125, legendY + 9);
+        
+        // 困难难度
+        ctx.fillStyle = '#f44336';
+        ctx.fillRect(legendX + 180, legendY, 30, 10);
+        ctx.fillStyle = '#333333';
+        ctx.fillText('困难', legendX + 215, legendY + 9);
 
         // 绘制网格和Y轴刻度
         ctx.strokeStyle = '#e0e0e0';
@@ -587,32 +629,67 @@ Page({
           ctx.fillText(`第${actualIndex}次`, x, height - 20);
         }
 
-        // 绘制数据折线
-        ctx.strokeStyle = '#1aad19';
+        // 绘制数据折线和数据点（按难度分类使用不同颜色）
+        const difficultyColors = {
+          'easy': '#4caf50',    // 绿色
+          'normal': '#2196f3',  // 蓝色
+          'hard': '#f44336'     // 红色
+        };
+        
+        // 先绘制连线
         ctx.lineWidth = 2;
         ctx.beginPath();
-
-        data.forEach((val, idx) => {
+        let lastX = null, lastY = null;
+        
+        displayRecords.forEach((record, idx) => {
+          const val = record.gameTime;
+          const difficulty = record.difficulty || 'normal';
           const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
           const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
-
+          
           if (idx === 0) {
             ctx.moveTo(x, y);
           } else {
-            ctx.lineTo(x, y);
+            // 如果相邻两点难度不同，分段绘制
+            if (displayRecords[idx - 1] && (displayRecords[idx - 1].difficulty || 'normal') === difficulty) {
+              ctx.strokeStyle = difficultyColors[difficulty];
+              ctx.beginPath();
+              ctx.moveTo(lastX, lastY);
+              ctx.lineTo(x, y);
+              ctx.stroke();
+            } else {
+              // 难度改变时，用灰色虚线连接
+              ctx.save();
+              ctx.strokeStyle = '#cccccc';
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.moveTo(lastX, lastY);
+              ctx.lineTo(x, y);
+              ctx.stroke();
+              ctx.restore();
+            }
           }
+          
+          lastX = x;
+          lastY = y;
         });
-        ctx.stroke();
 
-        // 绘制数据点
-        ctx.fillStyle = '#1aad19';
-        data.forEach((val, idx) => {
+        // 再绘制数据点
+        displayRecords.forEach((record, idx) => {
+          const val = record.gameTime;
+          const difficulty = record.difficulty || 'normal';
           const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
           const y = padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
 
+          ctx.fillStyle = difficultyColors[difficulty];
           ctx.beginPath();
-          ctx.arc(x, y, 4, 0, 2 * Math.PI);
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
           ctx.fill();
+          
+          // 添加白色边框让点更明显
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
         });
 
         console.log('[游戏记录] 绘制完成');

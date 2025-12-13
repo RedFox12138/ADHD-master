@@ -93,6 +93,72 @@
   font-weight: 500;
 }
 
+/* 难度统计区域 */
+.difficulty-stats {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 40rpx;
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.15);
+}
+
+.difficulty-stat-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 30rpx;
+}
+
+.difficulty-stat-items {
+  display: flex;
+  gap: 20rpx;
+}
+
+.difficulty-stat-item {
+  flex: 1;
+  padding: 30rpx 20rpx;
+  border-radius: 16rpx;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.difficulty-stat-item:active {
+  transform: scale(0.95);
+}
+
+.difficulty-stat-item.easy {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%);
+  border: 2rpx solid rgba(76, 175, 80, 0.3);
+}
+
+.difficulty-stat-item.normal {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.15) 0%, rgba(33, 150, 243, 0.05) 100%);
+  border: 2rpx solid rgba(33, 150, 243, 0.3);
+}
+
+.difficulty-stat-item.hard {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(244, 67, 54, 0.05) 100%);
+  border: 2rpx solid rgba(244, 67, 54, 0.3);
+}
+
+.difficulty-stat-label {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+}
+
+.difficulty-stat-value {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.difficulty-stat-max {
+  font-size: 22rpx;
+  color: #999;
+}
+
 /* 图表区域 */
 .chart-section {
   background: rgba(255, 255, 255, 0.95);
@@ -251,6 +317,30 @@
 .record-date {
   font-size: 24rpx;
   color: #666;
+}
+
+.record-difficulty {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  margin-top: 8rpx;
+}
+
+.record-difficulty.difficulty-easy {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.record-difficulty.difficulty-normal {
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+}
+
+.record-difficulty.difficulty-hard {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
 }
 
 .record-arrow {

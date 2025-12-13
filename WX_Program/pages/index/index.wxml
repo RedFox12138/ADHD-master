@@ -1,7 +1,47 @@
+<wxs module="utils">
+  var formatExp = function(exp) {
+    if (exp === undefined || exp === null || exp === '') {
+      return 0;
+    }
+    return Math.floor(exp);
+  }
+  module.exports = {
+    formatExp: formatExp
+  }
+</wxs>
+
 <view class="container">
   <!-- 启动封面 -->
   <view class="start-cover" wx:if="{{showStartCover}}">
     <image class="cover-image" src="/images/游戏封面.png" mode="aspectFit"></image>
+  </view>
+
+  <!-- 难度选择界面 -->
+  <view class="difficulty-selector" wx:if="{{showDifficultySelector}}">
+    <view class="difficulty-modal">
+      <view class="difficulty-title">选择游戏难度</view>
+      <view class="difficulty-desc">不同难度会影响升级速度</view>
+      
+      <view class="difficulty-options">
+        <view class="difficulty-option easy" bindtap="selectDifficulty" data-difficulty="easy">
+          <view class="difficulty-icon">😊</view>
+          <view class="difficulty-name">简单</view>
+          <view class="difficulty-info">经验值 +50%</view>
+        </view>
+        
+        <view class="difficulty-option normal" bindtap="selectDifficulty" data-difficulty="normal">
+          <view class="difficulty-icon">😐</view>
+          <view class="difficulty-name">普通</view>
+          <view class="difficulty-info">标准难度</view>
+        </view>
+        
+        <view class="difficulty-option hard" bindtap="selectDifficulty" data-difficulty="hard">
+          <view class="difficulty-icon">😤</view>
+          <view class="difficulty-name">困难</view>
+          <view class="difficulty-info">经验值 -30%</view>
+        </view>
+      </view>
+    </view>
   </view>
 
   <!-- 顶部工具栏 - 固定在顶部 -->
@@ -42,7 +82,7 @@
     </view>
     <view class="panel-content" wx:if="{{showDataPanel}}">
       <view class="data-row">
-        <text class="data-label">样本熵</text>
+        <text class="data-label">注意力分数</text>
         <text class="data-value">{{powerRatio !== null ? powerRatio : '--'}}</text>
       </view>
       <view class="data-row">
@@ -184,7 +224,7 @@
         <view class="exp-section">
           <view class="exp-header">
             <text class="exp-label">经验值</text>
-            <text class="exp-text">{{experience}}/{{nextLevelExp}}</text>
+            <text class="exp-text">{{utils.formatExp(experience)}}/{{nextLevelExp}}</text>
           </view>
           <view class="exp-bar">
             <view class="exp-fill" style="width: {{experience/nextLevelExp*100}}%"></view>

@@ -8,12 +8,13 @@ from PreProcess import preprocess3, preprocess3_fir
 from SingleDenoise_CORRECTED import eog_removal_corrected
 
 
-def process_txt_file(txt_path, output_folder, fs=250):
+def process_txt_file(txt_path, output_folder, fs=250, eog_strength=0.7):
     """
     处理单个txt文件，对整个信号进行处理
     :param txt_path: txt文件路径
     :param output_folder: 输出文件夹
     :param fs: 采样频率(Hz)
+    :param eog_strength: 眼电去除强度(0.1-1.0)，默认0.7
     """
     # 读取txt文件中的数据
     data = np.loadtxt(txt_path)
@@ -21,8 +22,8 @@ def process_txt_file(txt_path, output_folder, fs=250):
     # 对整个信号进行预处理
     processed_signal,_ = preprocess3(data, fs)
 
-
-    processed_signal = eog_removal_corrected(processed_signal, 250, True)
+    # 眼电去除（使用可调节的强度参数）
+    processed_signal = eog_removal_corrected(processed_signal, fs, visualize=True)
 
 
 
@@ -70,11 +71,12 @@ def process_txt_file(txt_path, output_folder, fs=250):
     np.savetxt(output_path, processed_signal)
 
 
-def batch_process_txt_folder(input_folder, output_folder):
+def batch_process_txt_folder(input_folder, output_folder, eog_strength=0.7):
     """
     批量处理文件夹中的所有txt文件
     :param input_folder: 输入文件夹路径
     :param output_folder: 输出文件夹路径
+    :param eog_strength: 眼电去除强度(0.1-1.0)，默认0.7
     """
     # 确保输出文件夹存在
     os.makedirs(output_folder, exist_ok=True)
@@ -85,7 +87,7 @@ def batch_process_txt_folder(input_folder, output_folder):
             txt_path = os.path.join(input_folder, filename)
             print(f"Processing: {filename}")
             try:
-                process_txt_file(txt_path, output_folder)
+                process_txt_file(txt_path, output_folder, eog_strength=eog_strength)
             except Exception as e:
                 print(f"Error processing {filename}: {str(e)}")
 
@@ -96,5 +98,11 @@ def batch_process_txt_folder(input_folder, output_folder):
 if __name__ == "__main__":
     input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
     output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
-
+    
+    # 眼电去除强度参数（可调节）
+    # 0.3-0.5: 温和去除，保留更多信号
+    # 0.6-0.8: 适中去除（推荐）
+    # 0.9-1.0: 强力去除
+    eog_strength = 0.0 # 默认适中强度
+    
     batch_process_txt_folder(input_folder, output_folder)

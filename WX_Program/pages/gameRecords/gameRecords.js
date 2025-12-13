@@ -10,7 +10,14 @@ Page({
     totalGames: 0,
     avgTime: 0,
     maxTime: 0,
-    trend: '' // 'up', 'down', 'stable'
+    trend: '', // 'up', 'down', 'stable'
+    // 按难度统计
+    easyGames: 0,
+    normalGames: 0,
+    hardGames: 0,
+    easyMaxTime: 0,
+    normalMaxTime: 0,
+    hardMaxTime: 0
   },
 
   onLoad: function() {
@@ -69,6 +76,19 @@ Page({
             const avgTime = Math.round(gameTimes.reduce((a, b) => a + b, 0) / totalGames);
             const maxTime = Math.max(...gameTimes);
 
+            // 按难度统计
+            const easyRecords = records.filter(r => r.difficulty === 'easy');
+            const normalRecords = records.filter(r => r.difficulty === 'normal');
+            const hardRecords = records.filter(r => r.difficulty === 'hard');
+            
+            const easyGames = easyRecords.length;
+            const normalGames = normalRecords.length;
+            const hardGames = hardRecords.length;
+            
+            const easyMaxTime = easyGames > 0 ? Math.max(...easyRecords.map(r => r.gameTime)) : 0;
+            const normalMaxTime = normalGames > 0 ? Math.max(...normalRecords.map(r => r.gameTime)) : 0;
+            const hardMaxTime = hardGames > 0 ? Math.max(...hardRecords.map(r => r.gameTime)) : 0;
+
             // 计算趋势（最近5局与之前的对比）
             let trend = 'stable';
             if (totalGames >= 10) {
@@ -91,6 +111,12 @@ Page({
               avgTime: avgTime,
               maxTime: maxTime,
               trend: trend,
+              easyGames: easyGames,
+              normalGames: normalGames,
+              hardGames: hardGames,
+              easyMaxTime: easyMaxTime,
+              normalMaxTime: normalMaxTime,
+              hardMaxTime: hardMaxTime,
               loading: false
             }, () => {
               this.renderChart(records);

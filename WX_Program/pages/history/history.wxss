@@ -258,6 +258,32 @@
   font-size: 24rpx;
   color: #666;
   margin-bottom: 4rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.file-difficulty {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.file-difficulty.difficulty-easy {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.file-difficulty.difficulty-normal {
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+}
+
+.file-difficulty.difficulty-hard {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
 }
 
 .file-arrow {
@@ -347,7 +373,9 @@
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
   border: 1rpx solid rgba(255, 255, 255, 0.5);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 12rpx;
 }
 
@@ -355,6 +383,29 @@
   font-size: 26rpx;
   color: #333;
   font-weight: 500;
+}
+
+.info-badge {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.info-badge.difficulty-easy {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.info-badge.difficulty-normal {
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+}
+
+.info-badge.difficulty-hard {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
 }
 
 .gesture-hint {

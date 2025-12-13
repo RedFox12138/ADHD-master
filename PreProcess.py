@@ -81,10 +81,54 @@ def preprocess3_fir(x, Fs, visualize=False):
 
 
 def preprocess3(x, Fs):
+    """
+    改进的预处理函数，使用零相位滤波避免开头尖峰
+    
+    参数:
+        x: 输入信号
+        Fs: 采样率
+    返回:
+        d1: 滤波后的信号
+        1: 占位符（保持接口一致）
+    """
+    # 使用scipy的filtfilt实现零相位滤波，避免边缘效应
+    from scipy.signal import iirnotch, butter, filtfilt
+    
+    d1 = np.copy(x)
+    
+    # 1. 50Hz陷波滤波器（使用filtfilt零相位滤波）
+    Q = 30  # 品质因子
+    b_notch_50, a_notch_50 = iirnotch(50, Q, Fs)
+    d1 = filtfilt(b_notch_50, a_notch_50, d1)
+    
+    # 2. 100Hz陷波滤波器
+    b_notch_100, a_notch_100 = iirnotch(100, Q, Fs)
+    d1 = filtfilt(b_notch_100, a_notch_100, d1)
+    
+    # 3. 带通滤波器 (0.5-40Hz)，使用4阶Butterworth滤波器
+    # 分解为高通+低通，避免高阶滤波器的不稳定性
+    order = 4
+    
+    # 高通滤波 (0.5Hz)
+    b_hp, a_hp = butter(order, 0.5, btype='high', fs=Fs)
+    d1 = filtfilt(b_hp, a_hp, d1)
+    
+    # 低通滤波 (40Hz)
+    b_lp, a_lp = butter(order, 40, btype='low', fs=Fs)
+    d1 = filtfilt(b_lp, a_lp, d1)
+    
+    return d1, 1
+
+
+def preprocess3_old(x, Fs):
+    """
+    旧版本的预处理函数（保留用于对比）
+    注意：此函数可能在信号开头产生尖峰
+    """
     d1 = IIR(x,Fs,50)
     d1 = IIR(d1, Fs, 100)
     # d1 = d1 - medfilt(d1, kernel_size=501)
-    d1 = HPF(d1, Fs, 0.5);
+    d1 = HPF(d1, Fs, 1);
     d1 = LPF(d1, Fs, 40);
     # theta_band = [4, 8]
     # beta_band = [13, 30]

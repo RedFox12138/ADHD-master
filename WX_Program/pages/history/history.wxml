@@ -111,7 +111,12 @@
           <view class="file-icon">📄</view>
           <view class="file-info">
             <view class="file-name">{{item.name}}</view>
-            <view class="file-time">{{item.time || '时间未知'}}</view>
+            <view class="file-time">
+              {{item.time || '时间未知'}}
+              <text class="file-difficulty difficulty-{{item.difficulty || 'normal'}}">
+                {{item.difficulty === 'easy' ? '简单' : item.difficulty === 'hard' ? '困难' : '普通'}}
+              </text>
+            </view>
           </view>
           <view class="file-arrow">➤</view>
         </view>
@@ -136,8 +141,11 @@
     </view>
 
     <!-- 图表信息（简化版） -->
-    <view class="chart-info-simple" wx:if="{{dataType === 'feature' && chartData.baseline !== null && chartData.baseline !== undefined}}">
-      <text class="info-text">基线: {{chartData.baseline.toFixed(2)}}</text>
+    <view class="chart-info-simple" wx:if="{{dataType === 'feature'}}">
+      <text class="info-text" wx:if="{{chartData.baseline !== null && chartData.baseline !== undefined}}">基线: {{chartData.baseline.toFixed(2)}}</text>
+      <text class="info-badge difficulty-{{chartData.difficulty || 'normal'}}">
+        {{chartData.difficulty === 'easy' ? '简单' : chartData.difficulty === 'hard' ? '困难' : '普通'}}
+      </text>
     </view>
 
     <!-- 图表容器 -->

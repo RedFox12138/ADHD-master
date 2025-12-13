@@ -45,6 +45,30 @@
       </view>
     </view>
 
+    <!-- 难度统计 -->
+    <view class="difficulty-stats">
+      <view class="difficulty-stat-title">📊 难度统计</view>
+      <view class="difficulty-stat-items">
+        <view class="difficulty-stat-item easy">
+          <view class="difficulty-stat-label">😊 简单</view>
+          <view class="difficulty-stat-value">{{easyGames}}次</view>
+          <view class="difficulty-stat-max" wx:if="{{easyGames > 0}}">最长: {{easyMaxTime}}秒</view>
+        </view>
+        
+        <view class="difficulty-stat-item normal">
+          <view class="difficulty-stat-label">😐 普通</view>
+          <view class="difficulty-stat-value">{{normalGames}}次</view>
+          <view class="difficulty-stat-max" wx:if="{{normalGames > 0}}">最长: {{normalMaxTime}}秒</view>
+        </view>
+        
+        <view class="difficulty-stat-item hard">
+          <view class="difficulty-stat-label">😤 困难</view>
+          <view class="difficulty-stat-value">{{hardGames}}次</view>
+          <view class="difficulty-stat-max" wx:if="{{hardGames > 0}}">最长: {{hardMaxTime}}秒</view>
+        </view>
+      </view>
+    </view>
+
     <!-- 趋势图表 -->
     <view class="chart-section">
       <view class="section-header">
@@ -75,6 +99,9 @@
             <view class="record-info">
               <view class="record-time">{{item.timestamp}}</view>
               <view class="record-duration">时长: {{item.gameTime}}秒</view>
+              <view class="record-difficulty difficulty-{{item.difficulty || 'normal'}}">
+                {{item.difficulty === 'easy' ? '简单' : item.difficulty === 'hard' ? '困难' : '普通'}}
+              </view>
             </view>
             <view class="record-arrow">➤</view>
           </view>

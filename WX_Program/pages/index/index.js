@@ -133,7 +133,11 @@ Page({
       bottom: 0
     },
     toolbarHeight: 88,     // 工具栏高度（rpx）
-    gameContainerHeight: 0 // 游戏容器实际高度
+    gameContainerHeight: 0, // 游戏容器实际高度
+    
+    // 游戏难度
+    gameDifficulty: 'normal',  // 游戏难度：'easy'=简单, 'normal'=普通, 'hard'=困难
+    showDifficultySelector: false  // 是否显示难度选择界面
   },
 
   onLoad: function() {
@@ -602,8 +606,28 @@ Page({
       return;
     }
     
-    // 隐藏启动封面
-    this.setData({ showStartCover: false });
+    // 显示难度选择界面
+    this.setData({ 
+      showDifficultySelector: true,
+      showStartCover: false
+    });
+  },
+  
+  // 选择游戏难度
+  selectDifficulty: function(e) {
+    audioManager.playSound('button_click');
+    const difficulty = e.currentTarget.dataset.difficulty;
+    console.log(`[难度选择] 用户选择了难度: ${difficulty}`);
+    
+    this.setData({ 
+      gameDifficulty: difficulty,
+      showDifficultySelector: false
+    }, () => {
+      // 在setData回调中确认难度已设置
+      console.log(`[难度选择] 难度设置确认: ${this.data.gameDifficulty}`);
+    });
+    
+    // 隐藏启动封面，开始游戏
     
     this.resetChart();
     this.setData({
@@ -622,12 +646,12 @@ Page({
   stopExperiment: function() {
     audioManager.playSound('button_click');  // 添加按钮音效
     
-    // 停止游戏BGM
+    // 停止游戏BGM（确保BGM完全停止）
     audioManager.stopBGM();
     
-    // 如果游戏已开始，保存游戏时长记录
+    // 如果游戏已开始，保存游戏时长记录（包含难度信息）
     if (this.data.gameStarted && this.data.survivedTime > 0) {
-      this.saveGameRecord(this.data.survivedTime);
+      this.saveGameRecord(this.data.survivedTime, this.data.gameDifficulty);
     }
 
     // 清除所有定时器
@@ -664,19 +688,21 @@ Page({
       difficultyTimer: null,
       baselineSum: 0,
       baselineCount: 0,
-      showStartCover: true  // 恢复启动封面显示
+      showStartCover: true,  // 恢复启动封面显示
+      showDifficultySelector: false  // 重置难度选择界面
     });
   },
 
   // 保存游戏时长记录
-  saveGameRecord: function(gameTime) {
+  saveGameRecord: function(gameTime, difficulty) {
     this.getUserId().then(user_id => {
       wx.request({
         url: 'https://xxyeeg.zicp.fun/saveGameRecord',
         method: 'POST',
         data: {
           userId: user_id,
-          gameTime: gameTime
+          gameTime: gameTime,
+          difficulty: difficulty || 'normal'  // 添加难度信息，默认为普通
         },
         success: (res) => {
           if (!res.data.success) {
@@ -782,6 +808,9 @@ Page({
 
   restartExperiment: function() {
     audioManager.playSound('button_click');  // 添加按钮音效
+    
+    // 停止游戏BGM
+    audioManager.stopBGM();
     
     this.stopExperiment();
     this.resetChart();
@@ -1072,7 +1101,19 @@ Page({
 
   // 获得经验值（由 WebSocket 推送触发）
   gainExperience: function(amount) {
-    let newExp = this.data.experience + amount;
+    // 根据难度调整经验值获取速率
+    const difficultyMultiplier = {
+      'easy': 1.5,    // 简单模式：经验值获取速度提升50%
+      'normal': 1.0,  // 普通模式：正常速度
+      'hard': 0.7     // 困难模式：经验值获取速度降低30%
+    };
+    const multiplier = difficultyMultiplier[this.data.gameDifficulty] || 1.0;
+    const adjustedAmount = amount * multiplier;  // 保留小数，累积精确经验值
+    
+    // 调试日志：输出难度和经验倍率
+    console.log(`[经验获取] 难度: ${this.data.gameDifficulty}, 原始经验: ${amount}, 倍率: ${multiplier}, 调整后: ${adjustedAmount.toFixed(2)}`);
+    
+    let newExp = this.data.experience + adjustedAmount;  // 内部累积小数
     let level = this.data.playerLevel;
     let nextLevelExp = this.data.nextLevelExp;
 
@@ -1386,9 +1427,9 @@ Page({
       gameStarted: false
     });
     
-    // 保存游戏记录（生存时间）
+    // 保存游戏记录（生存时间和难度）
     if (this.data.survivedTime > 0) {
-      this.saveGameRecord(this.data.survivedTime);
+      this.saveGameRecord(this.data.survivedTime, this.data.gameDifficulty);
     }
   },
 
@@ -1447,7 +1488,8 @@ Page({
         data: {
           hexData: hexToSend,
           userId: user_id,
-          Step: this.data.currentPhase
+          Step: this.data.currentPhase,
+          difficulty: this.data.gameDifficulty || 'normal'  // 发送难度信息
         },
         success: (res) => {
           // 静默成功，不打印
@@ -1814,7 +1856,7 @@ Page({
       categories: [],
       animation: false,
       series: [{
-        name: '样本熵',
+        name: '注意力分数',
         data: [],
         color: '#4facfe'
       }],
@@ -1825,7 +1867,7 @@ Page({
         titleFontColor: '#ffffff'
       },
       yAxis: {
-        title: '样本熵',
+        title: '注意力分数',
         format: val => (typeof val === 'number' ? val.toFixed(2) : val),
         min: 0,
         max: 2,  // 初始范围，会动态调整
@@ -1903,7 +1945,7 @@ Page({
     lineChart.updateData({
       categories: this.data.chartData.timePoints,
       series: [{
-        name: '样本熵',
+        name: '注意力分数',
         data: data,
         color: '#4facfe'
       }],
@@ -1981,6 +2023,9 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
+          // 停止游戏BGM
+          audioManager.stopBGM();
+          
           // 调用stopExperiment完全重置到初始状态（内部会自动保存游戏记录）
           this.stopExperiment();
 

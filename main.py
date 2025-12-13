@@ -59,7 +59,8 @@ def get_user_session(user_id):
                 'Base_value': None,
                 'Base_flag': False,
                 'feature_buffer': [],  # 缓存4个0.5s窗口的特征值
-                'push_counter': 0      # 推送计数器
+                'push_counter': 0,     # 推送计数器
+                'difficulty_saved': False  # 难度信息保存标志
             }
         else:
             user_sessions[user_id]['last_time'] = current_time
@@ -167,6 +168,7 @@ def process_data():
     points = data.get('points', [])      # 兼容旧版本：直接接收解码后的数据
     user_id = data.get('userId')
     Step = data.get('Step')
+    difficulty = data.get('difficulty', 'normal')  # 接收难度信息，默认为normal
 
     tbr_list = []
     
@@ -180,6 +182,38 @@ def process_data():
         return jsonify({"error": "userId is required"}), 400
 
     raw_file, processed_file,delta_file= get_user_session(user_id)
+    
+    # 保存难度信息到difficulty.json（仅在治疗阶段开始时保存一次）
+    if Step == '治疗阶段':
+        with session_lock:
+            session = user_sessions[user_id]
+            if not session.get('difficulty_saved', False):
+                # 获取结果目录路径
+                result_dir = os.path.dirname(delta_file)
+                difficulty_file = os.path.join(result_dir, 'difficulty.json')
+                
+                # 读取现有的难度信息
+                difficulties = {}
+                if os.path.exists(difficulty_file):
+                    try:
+                        with open(difficulty_file, 'r', encoding='utf-8') as f:
+                            difficulties = json.load(f)
+                    except Exception as e:
+                        print(f"[难度信息] 读取失败: {e}")
+                
+                # 添加当前文件的难度信息
+                file_name = os.path.basename(delta_file)
+                difficulties[file_name] = difficulty
+                
+                # 保存难度信息
+                try:
+                    with open(difficulty_file, 'w', encoding='utf-8') as f:
+                        json.dump(difficulties, f, ensure_ascii=False, indent=2)
+                    print(f"[难度信息] 保存成功: {file_name} -> {difficulty}")
+                except Exception as e:
+                    print(f"[难度信息] 保存失败: {e}")
+                
+                session['difficulty_saved'] = True
 
     # if Step == '基准阶段' or Step == '治疗阶段':
     if True:
@@ -508,10 +542,21 @@ def get_history_files():
 
         # 按修改时间降序排序
         files.sort(key=lambda x: x['mtime'], reverse=True)
+        
+        # 读取难度信息（从同目录下的difficulty.json文件）
+        difficulties = {}
+        difficulty_file = os.path.join(result_dir, 'difficulty.json')
+        if os.path.exists(difficulty_file):
+            try:
+                with open(difficulty_file, 'r', encoding='utf-8') as f:
+                    difficulties = json.load(f)
+            except Exception as e:
+                print(f"[难度信息] 读取失败: {e}")
 
         return jsonify({
             "success": True,
-            "files": [f["name"] for f in files]
+            "files": [f["name"] for f in files],
+            "difficulties": difficulties  # 添加难度信息
         })
 
     except Exception as e:
@@ -546,6 +591,17 @@ def get_history_file():
 
         # 文件路径
         file_path = os.path.join('data', user_id, 'result', date, file_name)
+        
+        # 读取难度信息
+        difficulty = 'normal'  # 默认普通难度
+        difficulty_file = os.path.join('data', user_id, 'result', date, 'difficulty.json')
+        if os.path.exists(difficulty_file):
+            try:
+                with open(difficulty_file, 'r', encoding='utf-8') as f:
+                    difficulties = json.load(f)
+                    difficulty = difficulties.get(file_name, 'normal')
+            except Exception as e:
+                print(f"[难度信息] 读取失败: {e}")
 
         # 检查文件是否存在
         if not os.path.exists(file_path):
@@ -575,7 +631,8 @@ def get_history_file():
             "success": True,
             "data": treatment_data,
             "baseline": baseline,
-            "totalPoints": len(treatment_data)
+            "totalPoints": len(treatment_data),
+            "difficulty": difficulty  # 添加难度信息
         })
 
     except Exception as e:
@@ -759,13 +816,14 @@ def get_raw_history_file():
 def save_game_record():
     """
     保存游戏时长记录
-    请求参数: { "userId": "用户openid", "gameTime": 游戏时长(秒) }
+    请求参数: { "userId": "用户openid", "gameTime": 游戏时长(秒), "difficulty": "easy/normal/hard" }
     返回: { "success": bool, "error": "错误信息" }
     """
     try:
         data = request.json
         user_id = data.get('userId')
         game_time = data.get('gameTime')
+        difficulty = data.get('difficulty', 'normal')  # 获取难度，默认为普通
 
         if not user_id:
             return jsonify({"success": False, "error": "userId is required"}), 400
@@ -777,6 +835,10 @@ def save_game_record():
             game_time = int(game_time)
         except (ValueError, TypeError):
             return jsonify({"success": False, "error": "gameTime must be an integer"}), 400
+
+        # 验证难度参数
+        if difficulty not in ['easy', 'normal', 'hard']:
+            difficulty = 'normal'
 
         # 获取当前日期和时间
         now = datetime.datetime.now()
@@ -790,11 +852,11 @@ def save_game_record():
         # 记录文件路径（按日期命名）
         record_file = os.path.join(records_dir, f"{date_str}.txt")
 
-        # 追加记录（格式：时间戳,游戏时长）
+        # 追加记录（格式：时间戳,游戏时长,难度）
         with open(record_file, 'a', encoding='utf-8') as f:
-            f.write(f"{timestamp},{game_time}\n")
+            f.write(f"{timestamp},{game_time},{difficulty}\n")
 
-        print(f"[游戏记录] 用户 {user_id} 游戏时长 {game_time}秒 已保存")
+        print(f"[游戏记录] 用户 {user_id} 游戏时长 {game_time}秒 难度 {difficulty} 已保存")
 
         return jsonify({"success": True})
 
@@ -954,13 +1016,19 @@ def get_game_records():
                     for line in f:
                         line = line.strip()
                         if ',' in line:
-                            timestamp, game_time = line.split(',', 1)
+                            parts = line.split(',')
                             try:
-                                records.append({
-                                    "timestamp": timestamp,
-                                    "gameTime": int(game_time)
-                                })
-                            except ValueError:
+                                record = {
+                                    "timestamp": parts[0],
+                                    "gameTime": int(parts[1])
+                                }
+                                # 兼容旧格式（无难度信息）和新格式（有难度信息）
+                                if len(parts) >= 3:
+                                    record["difficulty"] = parts[2]
+                                else:
+                                    record["difficulty"] = "normal"  # 默认为普通难度
+                                records.append(record)
+                            except (ValueError, IndexError):
                                 continue
         else:
             # 读取所有日期的记录文件
@@ -971,13 +1039,19 @@ def get_game_records():
                         for line in f:
                             line = line.strip()
                             if ',' in line:
-                                timestamp, game_time = line.split(',', 1)
+                                parts = line.split(',')
                                 try:
-                                    records.append({
-                                        "timestamp": timestamp,
-                                        "gameTime": int(game_time)
-                                    })
-                                except ValueError:
+                                    record = {
+                                        "timestamp": parts[0],
+                                        "gameTime": int(parts[1])
+                                    }
+                                    # 兼容旧格式（无难度信息）和新格式（有难度信息）
+                                    if len(parts) >= 3:
+                                        record["difficulty"] = parts[2]
+                                    else:
+                                        record["difficulty"] = "normal"  # 默认为普通难度
+                                    records.append(record)
+                                except (ValueError, IndexError):
                                     continue
 
         # 按时间戳排序
