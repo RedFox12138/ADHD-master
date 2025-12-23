@@ -12,7 +12,7 @@ font_sizes.legend = 16;
 font_sizes.subtitle = 16;
 
 % --- 用户需要设定的参数 ---
-data_file = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\比较好的数据\0926 XY额头躲避游戏3.mat';
+data_file = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\1222 XY躲避游戏3.mat';
 Fs = 250; % 采样率 (Hz)
 
 % 特征计算参数

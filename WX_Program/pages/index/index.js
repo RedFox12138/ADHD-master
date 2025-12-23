@@ -562,9 +562,9 @@ Page({
       
       // 每次收到推送时，立即判断是否增加经验值
       // 游戏结束后不再增加经验值
-      // 逻辑：当样本熵高于基准值时增加经验（样本熵越高表示注意力越集中）
+      // 逻辑：当样本熵低于基准值时增加经验（样本熵越低表示注意力越集中）
       if (!this.data.gameOver && this.data.baselineValue != null) {
-        if (tbrSnap > this.data.baselineValue) {
+        if (tbrSnap < this.data.baselineValue) {
           this.gainExperience(GAME_CONFIG.experience.gainRate);
         }
       }

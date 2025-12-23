@@ -8,7 +8,7 @@ import numpy as np
 import os
 from scipy.io import loadmat, savemat
 from PreProcess import preprocess3
-from SingleDenoise_CORRECTED import eog_removal_corrected
+from EOGRemovalDATNet import eog_removal_datnet
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
@@ -110,9 +110,9 @@ def process_single_stage(signal, stage_name, filename, fs=250, window_duration=6
         print(f"    -> 正在进行预处理...")
         processed_signal, _ = preprocess3(signal, fs)
         
-        # 步骤2: 眼电去除
-        print(f"    -> 正在去除眼电...")
-        cleaned_signal = eog_removal_corrected(processed_signal, fs, visualize=False)
+        # 步骤2: 眼电去除（使用DATNet无监督方法）
+        print(f"    -> 正在去除眼电（DATNet无监督网络）...")
+        cleaned_signal = eog_removal_datnet(processed_signal, fs, visualize=False)
         
         # 可视化对比
         if visualize:
@@ -232,7 +232,7 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
     print(f"找到 {total_files} 个mat文件")
     print(f"处理设置: 窗长={window_duration}秒, 步长={step_duration}秒")
     print(f"预处理方法: preprocess3")
-    print(f"眼电去除方法: eog_removal_corrected")
+    print(f"眼电去除方法: DATNet无监督网络 (eog_removal_datnet)")
     print(f"可视化: {'开启' if visualize else '关闭'}")
     if visualize:
         print(f"图像保存文件夹: {figure_folder}")
