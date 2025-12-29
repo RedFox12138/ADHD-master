@@ -97,11 +97,11 @@ def process_single_stage(signal, stage_name, filename, fs=250, window_duration=6
     :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param output_folder: 图像保存文件夹
-    :return: 处理后的窗口列表
+    :return: (处理后的完整信号, 处理后的窗口列表)
     """
     if len(signal) == 0:
         print(f"  {stage_name}阶段数据为空，跳过处理")
-        return []
+        return None, []
     
     print(f"  {stage_name}阶段长度: {len(signal)} 个点 ({len(signal)/fs:.2f}秒)")
     
@@ -129,13 +129,13 @@ def process_single_stage(signal, stage_name, filename, fs=250, window_duration=6
         
         print(f"    -> {stage_name}阶段切分出 {len(windows)} 个窗口")
         
-        return windows
+        return cleaned_signal, windows
         
     except Exception as e:
         print(f"  {stage_name}阶段处理失败: {str(e)}")
         import traceback
         traceback.print_exc()
-        return []
+        return None, []
 
 
 def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6, 
@@ -165,17 +165,34 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6
     
     # 处理静息阶段
     print(f"  处理静息阶段...")
-    rest_windows = process_single_stage(rest_stage, "静息", filename, fs, 
+    rest_cleaned, rest_windows = process_single_stage(rest_stage, "静息", filename, fs, 
                                        window_duration, step_duration, 
                                        visualize, figure_folder)
     
     # 处理注意力阶段
     print(f"  处理注意力阶段...")
-    attention_windows = process_single_stage(attention_stage, "注意力", filename, fs, 
+    attention_cleaned, attention_windows = process_single_stage(attention_stage, "注意力", filename, fs, 
                                             window_duration, step_duration, 
                                             visualize, figure_folder)
     
-    # 保存到同名的mat文件
+    # 保存预处理后的完整信号到同名mat文件
+    base_name = os.path.splitext(filename)[0]
+    if rest_cleaned is not None or attention_cleaned is not None:
+        full_output_path = os.path.join(output_folder, f"{base_name}_full.mat")
+        full_save_dict = {}
+        if rest_cleaned is not None:
+            full_save_dict['rest_stage'] = rest_cleaned
+        if attention_cleaned is not None:
+            full_save_dict['attention_stage'] = attention_cleaned
+        
+        savemat(full_output_path, full_save_dict)
+        print(f"  已保存预处理后完整信号到: {full_output_path}")
+        if rest_cleaned is not None:
+            print(f"    - 静息完整信号: {rest_cleaned.shape}")
+        if attention_cleaned is not None:
+            print(f"    - 注意力完整信号: {attention_cleaned.shape}")
+    
+    # 保存分割后的样本到同名的mat文件
     if len(rest_windows) > 0 or len(attention_windows) > 0:
         # 获取原文件名
         output_path = os.path.join(output_folder, filename)
@@ -192,7 +209,7 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6
             save_dict['attention_samples'] = attention_samples
         
         savemat(output_path, save_dict)
-        print(f"  已保存到: {output_path}")
+        print(f"  已保存分割后样本到: {output_path}")
         if len(rest_windows) > 0:
             print(f"    - 静息样本: {rest_samples.shape}")
         if len(attention_windows) > 0:
@@ -267,8 +284,8 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
 # 使用示例
 if __name__ == "__main__":
     # 配置参数
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\总和的mat'  # 包含原始mat文件的文件夹
-    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\预处理处理后的mat'  # 输出文件夹
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\裁剪好的MAT'  # 包含原始mat文件的文件夹
+    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\裁剪好的MAT\\预处理后'  # 输出文件夹
     figure_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\figures'  # 图像保存文件夹
     
     # 采样率和窗口参数

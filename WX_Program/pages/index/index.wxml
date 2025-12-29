@@ -11,6 +11,11 @@
 </wxs>
 
 <view class="container">
+  <!-- 注意力提醒 -->
+  <view class="attention-alert" wx:if="{{showAttentionAlert}}">
+    <view class="alert-text">⚠️ 加油！集中注意力！</view>
+  </view>
+
   <!-- 启动封面 -->
   <view class="start-cover" wx:if="{{showStartCover}}">
     <image class="cover-image" src="/images/游戏封面.png" mode="aspectFit"></image>
@@ -144,7 +149,7 @@
       </view>
 
       <!-- 炮台 -->
-      <view wx:for="{{turrets}}" wx:key="id" class="turret" 
+      <view wx:for="{{turrets}}" wx:key="id" class="turret {{item.disabled ? 'turret-disabled' : ''}}" 
             style="left: {{item.x}}rpx; top: {{item.y}}rpx; transform: translate(-50%, -50%) rotate({{item.rotation}}deg);">
         <image wx:if="{{item.image}}" class="turret-image" src="{{item.image}}" mode="aspectFit"></image>
         <view wx:else class="turret-body">🔫</view>

@@ -60,7 +60,9 @@ def get_user_session(user_id):
                 'Base_flag': False,
                 'feature_buffer': [],  # 缓存4个0.5s窗口的特征值
                 'push_counter': 0,     # 推送计数器
-                'difficulty_saved': False  # 难度信息保存标志
+                'difficulty_saved': False,  # 难度信息保存标志
+                'recording': False,  # 数据记录控制标志
+                'recording_started': False  # 是否已经开始过记录（用于创建新文件）
             }
         else:
             user_sessions[user_id]['last_time'] = current_time
@@ -221,10 +223,16 @@ def process_data():
             session = user_sessions[user_id]
             session['processing_buffer'].extend(points)
 
-        with open(raw_file, 'a') as f:
-            for p in points:
-                f.write(f"{p}\n")
-            f.flush()
+        # 只有在recording为True时才保存原始数据到文件
+        with session_lock:
+            session = user_sessions[user_id]
+            is_recording = session.get('recording', False)
+        
+        if is_recording:
+            with open(raw_file, 'a') as f:
+                for p in points:
+                    f.write(f"{p}\n")
+                f.flush()
 
 
         with session_lock:
@@ -386,6 +394,61 @@ def websocket(ws):
                 elif event == 'ping':
                     # 心跳响应（静默处理，不打印日志）
                     ws.send(json.dumps({'event': 'pong', 'message': 'pong'}))
+                    
+                elif event == 'start_recording':
+                    # 开始记录数据
+                    user_id = data.get('userId')
+                    if user_id:
+                        with session_lock:
+                            if user_id in user_sessions:
+                                session = user_sessions[user_id]
+                                # 如果是第一次开始记录，创建新文件
+                                if not session.get('recording_started', False):
+                                    current_time = datetime.datetime.now()
+                                    date_str = current_time.strftime("%Y%m%d")
+                                    timestamp = current_time.strftime("%H%M%S_%f")[:-3]
+                                    
+                                    user_dir = os.path.join('data', user_id, 'data', date_str)
+                                    result_dir = os.path.join('data', user_id, 'result', date_str)
+                                    os.makedirs(user_dir, exist_ok=True)
+                                    os.makedirs(result_dir, exist_ok=True)
+                                    
+                                    session['raw_file'] = os.path.join(user_dir, f"raw_{timestamp}.txt")
+                                    session['Delta_result'] = os.path.join(result_dir, f"{timestamp}.txt")
+                                    session['processed_file'] = os.path.join(user_dir, f"processed_{timestamp}.txt")
+                                    session['recording_started'] = True
+                                
+                                session['recording'] = True
+                                print(f'[WebSocket] 🔴 用户 {user_id} 开始记录数据 -> {session["raw_file"]}')
+                                ws.send(json.dumps({
+                                    'event': 'recording_started',
+                                    'message': '开始记录数据',
+                                    'userId': user_id
+                                }))
+                            else:
+                                print(f'[WebSocket] ⚠️ 用户 {user_id} 没有活跃session，无法开始记录')
+                                ws.send(json.dumps({
+                                    'event': 'error',
+                                    'message': '没有活跃session'
+                                }))
+                    
+                elif event == 'stop_recording':
+                    # 停止记录数据
+                    user_id = data.get('userId')
+                    if user_id:
+                        with session_lock:
+                            if user_id in user_sessions:
+                                session = user_sessions[user_id]
+                                session['recording'] = False
+                                session['recording_started'] = False  # 重置标志，下次开始时创建新文件
+                                print(f'[WebSocket] ⏹️ 用户 {user_id} 停止记录数据')
+                                ws.send(json.dumps({
+                                    'event': 'recording_stopped',
+                                    'message': '停止记录数据',
+                                    'userId': user_id
+                                }))
+                            else:
+                                print(f'[WebSocket] ⚠️ 用户 {user_id} 没有活跃session')
                     
                 elif event == 'unregister_user':
                     # 用户注销

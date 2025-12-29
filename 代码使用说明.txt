@@ -1,0 +1,26 @@
+ProcessRestAttentionDataset.py
+对采集的原始脑电信号进行批量预处理（可以包括眼电去除），每个mat文件单独处理其静息和注意力阶段，并且放入对应的文件夹中。
+
+ProcessEOGDataset.py
+对预处理后的信号，进行真实数据集眼电样本的划分
+
+batch_plot_all.m
+用于论文画图，可以同时画出来预处理前后的图片，用于展示滤波效果或者眼电去除的效果。
+
+analyze_rest_attention_features.m
+用于分析一个单独样本的静息、注意力阶段的特征时序图
+
+batch_classify_by_features.m
+用于把所有的样本，按照特征进行划分，TBR划分的放一个文件夹，样本熵划分的放另一个文件夹。
+
+batch_sampen_analysis.m
+只按照样本熵对数据进行批量的统计配对t校验
+
+CalculateFeature.m
+%% 批量特征对比分析脚本 - 寻找最佳区分特征
+% 目标: 测试多个特征在区分静息/注意力阶段的效果
+% 评估指标: 效应量(Cohen's d)、分离度、p值、ROC-AUC等
+
+data_selection_tool.m
+% 数据筛选工具 - 用于选择静息阶段和注意力阶段
+% 使用方法：在MATLAB命令窗口输入 data_selection_tool()

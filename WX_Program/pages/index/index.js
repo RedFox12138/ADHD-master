@@ -137,7 +137,13 @@ Page({
     
     // 游戏难度
     gameDifficulty: 'normal',  // 游戏难度：'easy'=简单, 'normal'=普通, 'hard'=困难
-    showDifficultySelector: false  // 是否显示难度选择界面
+    showDifficultySelector: false,  // 是否显示难度选择界面
+    
+    // 注意力监测
+    attentionLowStartTime: null,  // 注意力低下开始时间
+    showAttentionAlert: false,    // 是否显示注意力提醒
+    lastAlertTime: 0,             // 上次显示提醒的时间（秒数）
+    lastDamageTime: 0             // 上次损坏炮台的时间（秒数）
   },
 
   onLoad: function() {
@@ -560,6 +566,49 @@ Page({
         currentAttention: tbrSnap
       });
       
+      // 注意力监测：检测样本熵持续高于基准值的时间
+      if (this.data.baselineValue != null && !this.data.gameOver) {
+        if (tbrSnap > this.data.baselineValue) {
+          // 样本熵高于基准值（注意力不集中）
+          if (this.data.attentionLowStartTime === null) {
+            // 开始计时
+            this.data.attentionLowStartTime = Date.now();
+            this.data.lastAlertTime = 0;
+            this.data.lastDamageTime = 0;
+          } else {
+            // 计算已持续的秒数
+            const duration = Math.floor((Date.now() - this.data.attentionLowStartTime) / 1000);
+            
+            // 每6秒显示一次提醒（6秒、12秒、18秒...）
+            const currentAlertCycle = Math.floor(duration / 6);
+            if (currentAlertCycle > this.data.lastAlertTime && duration >= 6) {
+              this.data.lastAlertTime = currentAlertCycle;
+              this.setData({ showAttentionAlert: true });
+              audioManager.playSound('button_click');
+              // 3秒后自动隐藏
+              setTimeout(() => {
+                this.setData({ showAttentionAlert: false });
+              }, 3000);
+            }
+            
+            // 每12秒损坏一个炮台（12秒、24秒、36秒...）
+            const currentDamageCycle = Math.floor(duration / 12);
+            if (currentDamageCycle > this.data.lastDamageTime && duration >= 12) {
+              this.data.lastDamageTime = currentDamageCycle;
+              this.damageTurret();
+            }
+          }
+        } else {
+          // 样本熵低于或等于基准值，重置计时并恢复炮台
+          if (this.data.attentionLowStartTime !== null) {
+            this.repairAllTurrets();
+          }
+          this.data.attentionLowStartTime = null;
+          this.data.lastAlertTime = 0;
+          this.data.lastDamageTime = 0;
+        }
+      }
+      
       // 每次收到推送时，立即判断是否增加经验值
       // 游戏结束后不再增加经验值
       // 逻辑：当样本熵低于基准值时增加经验（样本熵越低表示注意力越集中）
@@ -570,6 +619,61 @@ Page({
       }
     }
     // 其他阶段（准备阶段、未开始等）：只显示TBR和更新图表
+  },
+  
+  // 损坏一个炮台（注意力不集中12秒）
+  damageTurret: function() {
+    const turrets = this.data.turrets;
+    // 找到所有未损坏的炮台
+    const activeTurrets = turrets.filter(t => !t.disabled);
+    
+    if (activeTurrets.length === 0) {
+      return; // 所有炮台已经损坏
+    }
+    
+    // 随机选择一个炮台
+    const randomIndex = Math.floor(Math.random() * activeTurrets.length);
+    const targetTurret = activeTurrets[randomIndex];
+    
+    // 找到该炮台在数组中的位置
+    const turretIndex = turrets.findIndex(t => t.id === targetTurret.id);
+    if (turretIndex !== -1) {
+      turrets[turretIndex].disabled = true;
+      this.setData({ turrets });
+      
+      // 显示损坏提示
+      wx.showToast({
+        title: '⚠️ 注意力不集中，炮台损坏！',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      // 播放音效
+      audioManager.playSound('button_click');
+    }
+  },
+  
+  // 恢复所有炮台（注意力恢复）
+  repairAllTurrets: function() {
+    const turrets = this.data.turrets;
+    let hasDisabled = false;
+    
+    turrets.forEach(turret => {
+      if (turret.disabled) {
+        turret.disabled = false;
+        hasDisabled = true;
+      }
+    });
+    
+    if (hasDisabled) {
+      this.setData({ turrets });
+      wx.showToast({
+        title: '✅ 注意力恢复，炮台修复！',
+        icon: 'success',
+        duration: 1500
+      });
+      audioManager.playSound('button_click');
+    }
   },
   
   // ========================================
@@ -627,6 +731,24 @@ Page({
       console.log(`[难度选择] 难度设置确认: ${this.data.gameDifficulty}`);
     });
     
+    // 发送开始记录指令给后端（从难度选择后就开始记录）
+    this.getUserId().then(user_id => {
+      if (socketTask && this.data.socketConnected) {
+        socketTask.send({
+          data: JSON.stringify({
+            event: 'start_recording',
+            userId: user_id
+          }),
+          success: () => {
+            console.log('✅ 已发送开始记录指令（难度选择后）');
+          },
+          fail: (err) => {
+            console.error('❌ 发送开始记录指令失败', err);
+          }
+        });
+      }
+    });
+    
     // 隐藏启动封面，开始游戏
     
     this.resetChart();
@@ -637,7 +759,11 @@ Page({
       baselineValue: null,
       baselineTbrList: [],  // 清空基准阶段样本熵列表
       gameOver: false,
-      gameStarted: false
+      gameStarted: false,
+      attentionLowStartTime: null,
+      showAttentionAlert: false,
+      lastAlertTime: 0,
+      lastDamageTime: 0
     });
     
     this.startPhaseTimer();
@@ -645,6 +771,24 @@ Page({
   
   stopExperiment: function() {
     audioManager.playSound('button_click');  // 添加按钮音效
+    
+    // 发送停止记录指令给后端
+    this.getUserId().then(user_id => {
+      if (socketTask && this.data.socketConnected) {
+        socketTask.send({
+          data: JSON.stringify({
+            event: 'stop_recording',
+            userId: user_id
+          }),
+          success: () => {
+            console.log('✅ 已发送停止记录指令');
+          },
+          fail: (err) => {
+            console.error('❌ 发送停止记录指令失败', err);
+          }
+        });
+      }
+    });
     
     // 停止游戏BGM（确保BGM完全停止）
     audioManager.stopBGM();
@@ -689,7 +833,11 @@ Page({
       baselineSum: 0,
       baselineCount: 0,
       showStartCover: true,  // 恢复启动封面显示
-      showDifficultySelector: false  // 重置难度选择界面
+      showDifficultySelector: false,  // 重置难度选择界面
+      attentionLowStartTime: null,
+      showAttentionAlert: false,
+      lastAlertTime: 0,
+      lastDamageTime: 0
     });
   },
 
@@ -697,7 +845,7 @@ Page({
   saveGameRecord: function(gameTime, difficulty) {
     this.getUserId().then(user_id => {
       wx.request({
-        url: 'https://xxyeeg.zicp.fun/saveGameRecord',
+        url: `${HTTP_URL}/saveGameRecord`,
         method: 'POST',
         data: {
           userId: user_id,
@@ -1025,6 +1173,11 @@ Page({
     const targetedMonsters = new Set(); // 记录已被锁定的怪物，避免重复攻击
 
     turrets.forEach(turret => {
+      // 跳过被禁用的炮台
+      if (turret.disabled) {
+        return;
+      }
+      
       // 寻找攻击范围内的怪物
       const targetsInRange = monsters
         .filter(monster => {
@@ -1408,6 +1561,24 @@ Page({
 
   // 结束游戏
   endGame: function() {
+    // 发送停止记录指令给后端
+    this.getUserId().then(user_id => {
+      if (socketTask && this.data.socketConnected) {
+        socketTask.send({
+          data: JSON.stringify({
+            event: 'stop_recording',
+            userId: user_id
+          }),
+          success: () => {
+            console.log('✅ 已发送停止记录指令');
+          },
+          fail: (err) => {
+            console.error('❌ 发送停止记录指令失败', err);
+          }
+        });
+      }
+    });
+
     // 停止游戏BGM
     audioManager.stopBGM();
     

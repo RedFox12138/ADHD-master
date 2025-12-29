@@ -7,6 +7,45 @@
   overflow: hidden;
 }
 
+/* 注意力提醒 */
+.attention-alert {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  animation: alertPulse 0.6s ease-in-out infinite alternate;
+}
+
+.alert-text {
+  background: linear-gradient(135deg, #ff4757 0%, #ff6348 100%);
+  color: #ffffff;
+  font-size: 48rpx;
+  font-weight: bold;
+  padding: 50rpx 70rpx;
+  border-radius: 30rpx;
+  box-shadow: 0 10rpx 40rpx rgba(255, 71, 87, 0.6);
+  border: 4rpx solid #ffffff;
+  text-align: center;
+  letter-spacing: 4rpx;
+}
+
+@keyframes alertPulse {
+  from { transform: translate(-50%, -50%) scale(0.95); }
+  to { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* 炮台损坏状态 */
+.turret-disabled {
+  opacity: 0.4;
+  filter: grayscale(100%);
+}
+
+.turret-disabled .turret-image,
+.turret-disabled .turret-body {
+  filter: grayscale(100%) brightness(0.7);
+}
+
 /* 启动封面 - 在container之前插入 */
 .start-cover {
   position: fixed;
