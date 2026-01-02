@@ -2,6 +2,13 @@
 处理mat文件中的静息和注意力数据
 进行预处理、眼电去除和滑动窗口分割
 每个mat文件单独处理，静息和注意力样本分别存储在cell中
+
+重要说明：
+1. 眼电去除使用DATNet模型，该模型是全卷积网络（FCN），支持可变长度输入
+2. 但要求输入长度必须能被8整除（因为有3次下采样：2^3=8）
+3. 处理流程：完整信号预处理 → 眼电去除 → 多窗口分割
+   这样眼电去除在完整信号上进行，效果更好
+4. 不同窗口大小会自动保存到不同的子目录（2s, 4s, 6s, 8s）
 """
 
 import numpy as np
@@ -37,16 +44,9 @@ def plot_signal_comparison(original_signal, processed_signal, cleaned_signal,
     # 创建输出文件夹
     os.makedirs(output_folder, exist_ok=True)
     
-    # 只保存前30秒的数据（如果数据超过30秒）
-    max_display_duration = 30  # 秒
-    max_samples = int(max_display_duration * fs)
-    
-    if len(original_signal) > max_samples:
-        original_save = original_signal[:max_samples]
-        processed_save = processed_signal[:max_samples]
-    else:
-        original_save = original_signal
-        processed_save = processed_signal
+    # 保存完整的信号数据（移除30秒限制）
+    original_save = original_signal
+    processed_save = processed_signal
     
     # 确保信号是float64类型，fs是float类型
     original_save = np.asarray(original_save, dtype=np.float64)
@@ -73,7 +73,15 @@ def sliding_window_split(signal, window_size, step_size):
     :param window_size: 窗口大小（采样点数）
     :param step_size: 步长（采样点数）
     :return: 切分后的窗口列表
+    
+    注意：由于DATNet模型有3次下采样，窗口大小必须能被8整除
     """
+    # 确保窗口大小能被8整除（DATNet要求）
+    if window_size % 8 != 0:
+        original_size = window_size
+        window_size = (window_size // 8) * 8
+        print(f"      警告: 窗口大小{original_size}不能被8整除，已调整为{window_size}")
+    
     windows = []
     start = 0
     
@@ -85,23 +93,20 @@ def sliding_window_split(signal, window_size, step_size):
     return windows
 
 
-def process_single_stage(signal, stage_name, filename, fs=250, window_duration=6, 
-                        step_duration=2, visualize=True, output_folder='figures'):
+def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, output_folder='figures'):
     """
-    处理单个阶段的信号（静息或注意力）
+    处理单个阶段的信号（静息或注意力）：预处理 + 眼电去除
     :param signal: 输入信号
     :param stage_name: 阶段名称（用于日志输出）
     :param filename: 文件名（用于图像保存）
     :param fs: 采样率(Hz)
-    :param window_duration: 窗口时长(秒)
-    :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param output_folder: 图像保存文件夹
-    :return: (处理后的完整信号, 处理后的窗口列表)
+    :return: 处理后的完整信号（去眼电后）
     """
     if len(signal) == 0:
         print(f"  {stage_name}阶段数据为空，跳过处理")
-        return None, []
+        return None
     
     print(f"  {stage_name}阶段长度: {len(signal)} 个点 ({len(signal)/fs:.2f}秒)")
     
@@ -120,32 +125,25 @@ def process_single_stage(signal, stage_name, filename, fs=250, window_duration=6
             plot_signal_comparison(signal, processed_signal, cleaned_signal,
                                  filename, stage_name, fs, output_folder)
         
-        # 步骤3: 滑动窗口切分
-        window_size = int(window_duration * fs)  # 6秒 * 250Hz = 1500个点
-        step_size = int(step_duration * fs)      # 2秒 * 250Hz = 500个点
+        print(f"    -> 预处理和眼电去除完成")
         
-        print(f"    -> 正在进行滑动窗口切分...")
-        windows = sliding_window_split(cleaned_signal, window_size, step_size)
-        
-        print(f"    -> {stage_name}阶段切分出 {len(windows)} 个窗口")
-        
-        return cleaned_signal, windows
+        return cleaned_signal
         
     except Exception as e:
         print(f"  {stage_name}阶段处理失败: {str(e)}")
         import traceback
         traceback.print_exc()
-        return None, []
+        return None
 
 
-def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6, 
+def process_and_save_mat_file(mat_path, output_folder, fs=250, window_durations=[2, 4, 6, 8], 
                              step_duration=2, visualize=True, figure_folder='figures'):
     """
     处理单个mat文件并保存为同名的新mat文件
     :param mat_path: 输入mat文件路径
     :param output_folder: 输出文件夹路径
     :param fs: 采样率(Hz)
-    :param window_duration: 窗口时长(秒)
+    :param window_durations: 窗口时长列表(秒)，默认为[2, 4, 6, 8]
     :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param figure_folder: 图像保存文件夹
@@ -162,21 +160,18 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6
     
     # 获取文件名
     filename = os.path.basename(mat_path)
-    
-    # 处理静息阶段
-    print(f"  处理静息阶段...")
-    rest_cleaned, rest_windows = process_single_stage(rest_stage, "静息", filename, fs, 
-                                       window_duration, step_duration, 
-                                       visualize, figure_folder)
-    
-    # 处理注意力阶段
-    print(f"  处理注意力阶段...")
-    attention_cleaned, attention_windows = process_single_stage(attention_stage, "注意力", filename, fs, 
-                                            window_duration, step_duration, 
-                                            visualize, figure_folder)
-    
-    # 保存预处理后的完整信号到同名mat文件
     base_name = os.path.splitext(filename)[0]
+    
+    # 只处理一次预处理和眼电去除（对完整信号）
+    print(f"  处理静息阶段...")
+    rest_cleaned = process_single_stage(rest_stage, "静息", filename, fs, 
+                                       visualize=visualize, output_folder=figure_folder)
+    
+    print(f"  处理注意力阶段...")
+    attention_cleaned = process_single_stage(attention_stage, "注意力", filename, fs, 
+                                            visualize=visualize, output_folder=figure_folder)
+    
+    # 保存预处理后的完整信号到根目录
     if rest_cleaned is not None or attention_cleaned is not None:
         full_output_path = os.path.join(output_folder, f"{base_name}_full.mat")
         full_save_dict = {}
@@ -192,45 +187,70 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_duration=6
         if attention_cleaned is not None:
             print(f"    - 注意力完整信号: {attention_cleaned.shape}")
     
-    # 保存分割后的样本到同名的mat文件
-    if len(rest_windows) > 0 or len(attention_windows) > 0:
-        # 获取原文件名
-        output_path = os.path.join(output_folder, filename)
+    # 对每个窗口大小进行分割并保存到对应的子目录
+    # 注意：步长固定为2秒（500个点），不随窗口大小变化
+    any_success = False
+    step_size = int(step_duration * fs)  # 固定步长：2秒 = 500个点
+    
+    for window_duration in window_durations:
+        print(f"  \n  处理窗口大小: {window_duration}秒 (步长固定{step_duration}秒)")
         
-        # 转换为numpy矩阵 (N x 1500)，每行是一个窗口样本
-        rest_samples = np.array(rest_windows) if len(rest_windows) > 0 else np.array([])
-        attention_samples = np.array(attention_windows) if len(attention_windows) > 0 else np.array([])
+        # 创建对应窗口大小的子目录
+        window_folder = os.path.join(output_folder, f"{window_duration}s")
+        os.makedirs(window_folder, exist_ok=True)
         
-        # 保存为mat文件（直接保存为矩阵，不使用cell）
-        save_dict = {}
-        if len(rest_windows) > 0:
-            save_dict['rest_samples'] = rest_samples
-        if len(attention_windows) > 0:
-            save_dict['attention_samples'] = attention_samples
+        # 计算窗口大小
+        window_size = int(window_duration * fs)
         
-        savemat(output_path, save_dict)
-        print(f"  已保存分割后样本到: {output_path}")
-        if len(rest_windows) > 0:
-            print(f"    - 静息样本: {rest_samples.shape}")
-        if len(attention_windows) > 0:
-            print(f"    - 注意力样本: {attention_samples.shape}")
+        # 对预处理后的完整信号进行滑动窗口切分
+        rest_windows = []
+        attention_windows = []
         
-        return True
-    else:
-        print(f"  未生成任何样本，跳过保存")
-        return False
+        if rest_cleaned is not None:
+            rest_windows = sliding_window_split(rest_cleaned, window_size, step_size)
+            print(f"    -> 静息阶段切分出 {len(rest_windows)} 个窗口 (窗长{window_duration}s, 步长{step_duration}s)")
+        
+        if attention_cleaned is not None:
+            attention_windows = sliding_window_split(attention_cleaned, window_size, step_size)
+            print(f"    -> 注意力阶段切分出 {len(attention_windows)} 个窗口 (窗长{window_duration}s, 步长{step_duration}s)")
+        
+        # 保存分割后的样本
+        if len(rest_windows) > 0 or len(attention_windows) > 0:
+            output_path = os.path.join(window_folder, filename)
+            
+            # 转换为numpy矩阵
+            rest_samples = np.array(rest_windows) if len(rest_windows) > 0 else np.array([])
+            attention_samples = np.array(attention_windows) if len(attention_windows) > 0 else np.array([])
+            
+            # 保存为mat文件
+            save_dict = {}
+            if len(rest_windows) > 0:
+                save_dict['rest_samples'] = rest_samples
+            if len(attention_windows) > 0:
+                save_dict['attention_samples'] = attention_samples
+            
+            savemat(output_path, save_dict)
+            print(f"    -> 已保存到: {output_path}")
+            if len(rest_windows) > 0:
+                print(f"       静息样本: {rest_samples.shape}")
+            if len(attention_windows) > 0:
+                print(f"       注意力样本: {attention_samples.shape}")
+            
+            any_success = True
+    
+    return any_success
 
 
 def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250, 
-                                        window_duration=6, step_duration=2, 
+                                        window_durations=[2, 4, 6, 8], step_duration=2, 
                                         visualize=True, figure_folder='figures'):
     """
     批量处理文件夹中的所有mat文件
-    每个mat文件单独保存为同名的新mat文件
+    每个mat文件单独保存为同名的新mat文件，并按不同窗口大小保存到子目录
     :param input_folder: 输入文件夹路径（包含原始mat文件）
     :param output_folder: 输出文件夹路径（保存处理后的mat文件）
     :param fs: 采样率(Hz)
-    :param window_duration: 窗口时长(秒)
+    :param window_durations: 窗口时长列表(秒)，默认为[2, 4, 6, 8]
     :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param figure_folder: 图像保存文件夹
@@ -247,7 +267,7 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
         return
     
     print(f"找到 {total_files} 个mat文件")
-    print(f"处理设置: 窗长={window_duration}秒, 步长={step_duration}秒")
+    print(f"处理设置: 窗长={window_durations}秒, 步长={step_duration}秒")
     print(f"预处理方法: preprocess3")
     print(f"眼电去除方法: DATNet无监督网络 (eog_removal_datnet)")
     print(f"可视化: {'开启' if visualize else '关闭'}")
@@ -255,6 +275,7 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
         print(f"图像保存文件夹: {figure_folder}")
     print(f"输入文件夹: {input_folder}")
     print(f"输出文件夹: {output_folder}")
+    print(f"将生成子目录: {[f'{w}s' for w in window_durations]}")
     print("=" * 60)
     
     success_count = 0
@@ -265,7 +286,7 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
         
         try:
             if process_and_save_mat_file(mat_path, output_folder, fs, 
-                                        window_duration, step_duration, 
+                                        window_durations, step_duration, 
                                         visualize, figure_folder):
                 success_count += 1
         except Exception as e:
@@ -284,13 +305,21 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
 # 使用示例
 if __name__ == "__main__":
     # 配置参数
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\裁剪好的MAT'  # 包含原始mat文件的文件夹
-    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\裁剪好的MAT\\预处理后'  # 输出文件夹
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\总和的mat'  # 包含原始mat文件的文件夹
+    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\预处理处理后的mat'  # 输出文件夹
     figure_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\figures'  # 图像保存文件夹
     
     # 采样率和窗口参数
     fs = 250  # 采样率 250Hz
-    window_duration = 6  # 窗口时长 6秒
+    
+    # 窗口时长列表（秒）
+    # 注意：DATNet模型要求输入长度能被8整除（3次下采样: 2^3=8）
+    # - 2秒 = 500点 → 自动调整为 496点 (1.984秒)
+    # - 4秒 = 1000点 → ✓ 可直接使用
+    # - 6秒 = 1500点 → 自动调整为 1496点 (5.984秒)
+    # - 8秒 = 2000点 → ✓ 可直接使用
+    window_durations = [2, 4, 6, 8]
+    
     step_duration = 2  # 步长 2秒
     visualize = True  # 可视化标志位: True=生成图像, False=不生成图像
     
@@ -299,7 +328,7 @@ if __name__ == "__main__":
         input_folder=input_folder,
         output_folder=output_folder,
         fs=fs,
-        window_duration=window_duration,
+        window_durations=window_durations,
         step_duration=step_duration,
         visualize=visualize,
         figure_folder=figure_folder

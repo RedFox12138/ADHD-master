@@ -12,7 +12,7 @@ font_sizes.legend = 16;
 font_sizes.subtitle = 16;
 
 % --- 用户需要设定的参数 ---
-data_file = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\微信小程序\裁剪好的MAT\预处理后\1223 HR微信小程序信号图-存活127s-舒尔特51s.mat';
+data_file = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\贴片 1231 XY额头躲避游戏1.mat';
 Fs = 250; % 采样率 (Hz)
 
 % 特征计算参数

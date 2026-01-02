@@ -7,8 +7,8 @@ import os
 import shutil
 
 # 配置路径
-source_dir = r"D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat"
-target_dir = r"D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\比较好的数据"
+source_dir = r"D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\8s"
+target_dir = r"D:\Pycharm_Projects\ADHD-master\data\分类结果\用于配对t校验\分段\8s"
 
 print("\n" + "="*70)
 print("同名文件覆盖工具 - 直接执行模式")
