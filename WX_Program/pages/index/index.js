@@ -920,8 +920,8 @@ Page({
       survivedTime: 0
     });
 
-    // ========== 切换到游戏BGM（正式启用） ==========
-    audioManager.playBGM('game_bgm', 'ADHD训练 - 游戏中');
+    // ========== 切换到游戏BGM（正式启用） - 启用随机播放列表 ==========
+    audioManager.playBGM('game_bgm', 'ADHD训练 - 游戏中', true);
     // ==========================================
 
     // 初始化游戏

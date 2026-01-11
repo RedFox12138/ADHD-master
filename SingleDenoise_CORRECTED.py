@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pywt
 from scipy.signal import firwin, lfilter, filtfilt
+from scipy.ndimage import gaussian_filter1d
 
 
 def find_intervals(binary_array):
@@ -12,9 +13,9 @@ def find_intervals(binary_array):
     return starts, ends
 
 
-def eog_removal_corrected(eeg, fs=250, visualize=False):
+def eog_removal_corrected(eeg, fs=250, visualize=False, removal_ratio=0.85):
     """
-    单通道脑电信号眼电去除函数 - 严格按照文献实现
+    单通道脑电信号眼电去除函数 - 改进版（平滑去除）
     
     参考文献: 《单通道脑电信号中眼电干扰的自动分离方法》
     
@@ -22,6 +23,7 @@ def eog_removal_corrected(eeg, fs=250, visualize=False):
         eeg : 输入脑电信号（1D数组）
         fs : 采样率（默认250Hz）
         visualize : 是否显示处理过程（默认False）
+        removal_ratio : 眼电去除比例，0-1之间，默认0.72（去除72%）
     返回：
         clean_eeg : 去除眼电后的脑电信号
     """
@@ -113,13 +115,13 @@ def eog_removal_corrected(eeg, fs=250, visualize=False):
 
     for idx, (s, e) in enumerate(final_intervals):
         win_len = e - s
-        # 添加重叠以避免边界效应
-        overlap = min(int(0.25 * fs), win_len // 2)
+        # 增加更大的重叠以改善边界平滑度
+        overlap = min(int(0.5 * fs), max(int(0.3 * win_len), int(0.1 * fs)))
         s_ext = max(0, s - overlap)
         e_ext = min(len(eeg), e + overlap)
 
         segment = eeg[s_ext:e_ext]
-        N_segment = len(segment)  # ⚠️ 修正2: 保存原始长度用于n计算
+        N_segment = len(segment)
 
         # 计算最大分解层数
         max_level = pywt.dwt_max_level(N_segment, w.dec_len)
@@ -132,40 +134,38 @@ def eog_removal_corrected(eeg, fs=250, visualize=False):
         # 小波分解
         coeffs = pywt.wavedec(segment, w, level=level)
 
-        # ⚠️ 文献核心算法:
-        # 1. 保留近似系数cA (coeffs[0])
-        # 2. 对每层细节系数cDj应用硬阈值,去除背景脑电成分
-        # 3. 重构后得到眼电伪迹估计
+        # 文献核心算法: 通过硬阈值提取眼电成分
         new_coeffs = [coeffs[0]]  # 保留近似系数
         
         for j in range(1, len(coeffs)):
             # 文献公式(4): α = 2.5 (j<3), α = 2.0 (j≥3)
-            alpha = 2.5 if j < 3 else 2.0
+            # 调整alpha使其更保守
+            alpha = 2.0 if j < 3 else 1.5
             
-            # ⚠️ 修正3: 文献公式(3) - n应该用原始信号长度N,不是当前层长度
+            # 文献公式(3) - n应该用原始信号长度N
             n = int(N_segment / (level + 2 - j) ** alpha)
             n = max(0, min(n, len(coeffs[j]) - 1))
 
             # 计算通用阈值 (文献公式5)
             coeff_abs = np.abs(coeffs[j])
             sigma_j = np.median(coeff_abs) / 0.6745 if np.any(coeff_abs != 0) else 0.0
-            universal_thr = sigma_j * np.sqrt(2 * np.log(max(len(coeff_abs), 2)))
+            # 降低通用阈值系数，从sqrt(2*log(n))降低到1.5倍sigma
+            universal_thr = sigma_j * 1.5
 
             # 计算BM阈值 (Birgé-Massart阈值,文献公式3)
             sorted_coeff = np.sort(coeff_abs)[::-1]
             bm_thr = sorted_coeff[n] if n < len(sorted_coeff) else 0.0
             
-            # 取两者最小值
-            thr = min(bm_thr, universal_thr)
+            # 取两者最小值，并再降低20%使其更保守
+            thr = min(bm_thr, universal_thr) * 0.8
 
-            # 硬阈值处理
-            new_c = pywt.threshold(coeffs[j], value=thr, mode='hard') if sigma_j > 0 else coeffs[j]
+            # 使用软阈值替代硬阈值，使过渡更平滑
+            new_c = pywt.threshold(coeffs[j], value=thr, mode='soft') if sigma_j > 0 else coeffs[j]
             new_coeffs.append(new_c)
             
             print(f"  区间{idx+1} 层{j}: n={n}, σ={sigma_j:.4f}, BM_thr={bm_thr:.4f}, U_thr={universal_thr:.4f}, 采用={thr:.4f}")
 
         # 重构得到眼电伪迹估计
-        # 文献逻辑: 硬阈值后保留的是眼电成分(低频),去除的是脑电高频成分
         eog_estimate = pywt.waverec(new_coeffs, w)
         
         # 长度对齐
@@ -174,28 +174,108 @@ def eog_removal_corrected(eeg, fs=250, visualize=False):
         elif len(eog_estimate) < len(segment):
             eog_estimate = np.pad(eog_estimate, (0, len(segment) - len(eog_estimate)), mode='edge')
 
-        # 文献公式(1): 净化信号 = 原信号 - 眼电估计
-        clean_segment = segment - eog_estimate
+        # ===== 改进的边界平滑处理 =====
+        # 1. 创建平滑的Tukey窗（余弦渐变窗），边缘更平滑
+        taper_ratio = min(0.5, overlap / len(segment))  # 渐变区域占比
+        taper_len = int(taper_ratio * len(segment))
+        
+        # Tukey窗：中间为1，两端为余弦渐变
+        taper_window = np.ones(len(segment))
+        if taper_len > 0:
+            # 左侧渐变：从0到1
+            left_taper = 0.5 * (1 + np.cos(np.linspace(np.pi, 2*np.pi, taper_len)))
+            # 右侧渐变：从1到0  
+            right_taper = 0.5 * (1 + np.cos(np.linspace(0, np.pi, taper_len)))
+            
+            taper_window[:taper_len] = left_taper
+            taper_window[-taper_len:] = right_taper
 
-        # 应用过渡窗以平滑边界
-        transition = min(100, overlap)
-        if transition > 0:
-            window = np.ones(len(clean_segment))
-            window[:transition] = np.cos(np.linspace(np.pi / 2, 0, transition)) ** 2
-            window[-transition:] = np.cos(np.linspace(0, np.pi / 2, transition)) ** 2
-            clean_segment = clean_segment * window + segment * (1 - window)
+        # 2. 自适应眼电去除强度：根据包络强度调整去除比例
+        # 在核心区域(s到e)完全去除，边界区域逐渐减弱
+        removal_strength = np.ones(len(segment))
+        
+        # 计算当前段相对于起止位置的去除强度
+        core_start = s - s_ext  # 核心区域起点（相对segment）
+        core_end = e - s_ext    # 核心区域终点
+        
+        # 在重叠区域创建渐变的去除强度
+        for i in range(len(segment)):
+            if i < core_start:
+                # 左侧渐变区：强度从0到1
+                removal_strength[i] = i / max(core_start, 1)
+            elif i > core_end:
+                # 右侧渐变区：强度从1到0
+                removal_strength[i] = max(0, (len(segment) - i) / max(len(segment) - core_end, 1))
+            # else: 核心区域保持1
+        
+        # 平滑去除强度曲线
+        if len(removal_strength) > 5:
+            from scipy.ndimage import gaussian_filter1d
+            removal_strength = gaussian_filter1d(removal_strength, sigma=min(20, len(removal_strength)//10))
+        
+        # 3. 应用自适应眼电去除
+        # clean = original - (eog_estimate * removal_ratio * removal_strength * taper)
+        # 只去除部分眼电，而不是全部，使结果更自然
+        clean_segment = segment - (eog_estimate * removal_ratio * removal_strength * taper_window)
 
-        # 边界融合
-        if transition > 0:
-            start = s_ext + transition // 2
-            end = e_ext - transition // 2
-            if start < end and start < len(clean_eeg) and end <= len(clean_eeg):
-                seg_start = transition // 2
-                seg_end = len(clean_segment) - transition // 2
-                if seg_start < seg_end:
-                    clean_eeg[start:end] = clean_segment[seg_start:seg_end]
-        else:
-            clean_eeg[s_ext:e_ext] = clean_segment
+        # 3.5 对去除后的片段进行平滑处理，消除尖峰
+        # 使用轻微的移动平均滤波，只在核心处理区域应用
+        from scipy.signal import savgol_filter
+        if len(clean_segment) > 50:
+            # 使用Savitzky-Golay滤波器进行平滑，保持信号形状
+            # 减小窗口长度，降低平滑强度
+            window_length = min(21, len(clean_segment) if len(clean_segment) % 2 == 1 else len(clean_segment) - 1)
+            if window_length >= 5:
+                # 创建一个平滑权重：只在核心区域轻微应用平滑
+                smooth_weight = np.zeros(len(segment))
+                # 降低平滑强度到0.3，保留更多原始信号特征
+                smooth_weight[core_start:core_end] = 0.3
+                
+                # 在边界区域渐变
+                transition_len = min(taper_len // 2, 30)
+                if transition_len > 0:
+                    # 左边界渐入
+                    left_start = max(0, core_start - transition_len)
+                    smooth_weight[left_start:core_start] = np.linspace(0, 0.3, core_start - left_start)
+                    # 右边界渐出
+                    right_end = min(len(segment), core_end + transition_len)
+                    smooth_weight[core_end:right_end] = np.linspace(0.3, 0, right_end - core_end)
+                
+                # 应用Savitzky-Golay滤波
+                try:
+                    smoothed = savgol_filter(clean_segment, window_length, polyorder=2)
+                    # 混合原始和平滑的信号，只应用30%的平滑
+                    clean_segment = clean_segment * (1 - smooth_weight) + smoothed * smooth_weight
+                except:
+                    pass  # 如果滤波失败，保持原样
+
+        # 4. 改进的边界融合：使用交叉淡入淡出
+        # 计算实际需要替换的区域
+        actual_start = max(0, s_ext)
+        actual_end = min(len(eeg), e_ext)
+        seg_len = actual_end - actual_start
+        
+        if seg_len > 0 and seg_len <= len(clean_segment):
+            # 提取对应的清洁片段
+            clean_to_apply = clean_segment[:seg_len]
+            
+            # 创建融合权重：边界处平滑过渡
+            blend_weight = np.ones(seg_len)
+            fade_len = min(taper_len, seg_len // 4)
+            
+            if fade_len > 0:
+                # 左边界淡入
+                if actual_start > 0:
+                    blend_weight[:fade_len] = np.linspace(0, 1, fade_len)
+                # 右边界淡出
+                if actual_end < len(eeg):
+                    blend_weight[-fade_len:] = np.linspace(1, 0, fade_len)
+            
+            # 应用融合
+            clean_eeg[actual_start:actual_end] = (
+                clean_to_apply * blend_weight + 
+                clean_eeg[actual_start:actual_end] * (1 - blend_weight)
+            )
 
     # ===== 可视化 =====
     if visualize:

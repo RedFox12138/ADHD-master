@@ -12,7 +12,7 @@ font_sizes.legend = 16;
 font_sizes.subtitle = 16;
 
 % --- 用户需要设定的参数 ---
-data_file = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat\贴片 1231 XY额头躲避游戏1.mat';
+data_file = 'D:\Pycharm_Projects\ADHD-master\data\分类结果\不同个体\CC\1013 CC额头躲避游戏2.mat';
 Fs = 250; % 采样率 (Hz)
 
 % 特征计算参数
@@ -59,17 +59,27 @@ try
     fprintf('\n--- 计算静息阶段特征 ---\n');
     rest_sampen = [];
     rest_tbr = [];
+    rest_permen = [];
     
     if ~isempty(rest_samples)
         n_rest = size(rest_samples, 1);
         rest_sampen = zeros(n_rest, 1);
         rest_tbr = zeros(n_rest, 1);
+        rest_permen = zeros(n_rest, 1);
         
         for i = 1:n_rest
             segment = rest_samples(i, :);
             Samp = SampEn(segment);
             rest_sampen(i) = Samp(3);
             rest_tbr(i) = compute_power_ratio(segment, Fs, theta_band, beta_band);
+            
+            % 计算排列熵（原始值，不归一化）
+            try
+                [perm_val, ~, ~] = PermEn(segment,'m', 6);
+                rest_permen(i) = perm_val(end);
+            catch
+                rest_permen(i) = NaN;
+            end
         end
         fprintf('静息阶段特征计算完成\n');
     end
@@ -78,17 +88,27 @@ try
     fprintf('\n--- 计算注意力阶段特征 ---\n');
     attention_sampen = [];
     attention_tbr = [];
+    attention_permen = [];
     
     if ~isempty(attention_samples)
         n_attention = size(attention_samples, 1);
         attention_sampen = zeros(n_attention, 1);
         attention_tbr = zeros(n_attention, 1);
+        attention_permen = zeros(n_attention, 1);
         
         for i = 1:n_attention
             segment = attention_samples(i, :);
             Samp = SampEn(segment);
             attention_sampen(i) = Samp(3);
             attention_tbr(i) = compute_power_ratio(segment, Fs, theta_band, beta_band);
+            
+            % 计算排列熵（原始值，不归一化）
+            try
+                [perm_val, ~, ~] = PermEn(segment,'m', 6);
+                attention_permen(i) = perm_val(end);
+            catch
+                attention_permen(i) = NaN;
+            end
         end
         fprintf('注意力阶段特征计算完成\n');
     end
@@ -100,20 +120,24 @@ try
         fprintf('\n【静息阶段】\n');
         fprintf('样本熵: 均值=%.4f, 标准差=%.4f\n', mean(rest_sampen), std(rest_sampen));
         fprintf('TBR:    均值=%.4f, 标准差=%.4f\n', mean(rest_tbr), std(rest_tbr));
+        fprintf('排列熵: 均值=%.4f, 标准差=%.4f\n', mean(rest_permen(~isnan(rest_permen))), std(rest_permen(~isnan(rest_permen))));
     end
     
     if ~isempty(attention_sampen)
         fprintf('\n【注意力阶段】\n');
         fprintf('样本熵: 均值=%.4f, 标准差=%.4f\n', mean(attention_sampen), std(attention_sampen));
         fprintf('TBR:    均值=%.4f, 标准差=%.4f\n', mean(attention_tbr), std(attention_tbr));
+        fprintf('排列熵: 均值=%.4f, 标准差=%.4f\n', mean(attention_permen(~isnan(attention_permen))), std(attention_permen(~isnan(attention_permen))));
     end
     
     if ~isempty(rest_sampen) && ~isempty(attention_sampen)
         fprintf('\n【差异显著性检验 (t-test)】\n');
         [~, p_sampen] = ttest2(rest_sampen, attention_sampen);
         [~, p_tbr] = ttest2(rest_tbr, attention_tbr);
+        [~, p_permen] = ttest2(rest_permen(~isnan(rest_permen)), attention_permen(~isnan(attention_permen)));
         fprintf('样本熵 p-value = %.4f\n', p_sampen);
         fprintf('TBR p-value = %.4f\n', p_tbr);
+        fprintf('排列熵 p-value = %.4f\n', p_permen);
     end
     
     fprintf('==================================\n\n');
@@ -133,6 +157,22 @@ try
         hold on;
         plot(1, mean(rest_sampen), 'ro', 'MarkerSize', 10, 'LineWidth', 2);
         plot(2, mean(attention_sampen), 'ro', 'MarkerSize', 10, 'LineWidth', 2);
+        hold off;
+    end
+    
+    % 5.1.1 排列熵箱线图
+    if ~isempty(rest_permen) && ~isempty(attention_permen)
+        figure('Position', [100, 100, 800, 600]);
+        boxplot([rest_permen; attention_permen], ...
+                [ones(size(rest_permen)); 2*ones(size(attention_permen))], ...
+                'Labels', {'静息', '注意力'}, 'Colors', 'br');
+        ylabel('排列熵值', 'FontName', 'SimSun', 'FontSize', font_sizes.axis_label);
+        title(['排列熵对比 - ' display_filename], 'FontName', 'SimSun', ...
+              'FontSize', font_sizes.title, 'Interpreter', 'none');
+        grid on;
+        hold on;
+        plot(1, mean(rest_permen(~isnan(rest_permen))), 'ro', 'MarkerSize', 10, 'LineWidth', 2);
+        plot(2, mean(attention_permen(~isnan(attention_permen))), 'ro', 'MarkerSize', 10, 'LineWidth', 2);
         hold off;
     end
     
@@ -171,6 +211,25 @@ try
         grid on;
     end
     
+    % 5.3.1 排列熵分布直方图
+    if ~isempty(rest_permen) && ~isempty(attention_permen)
+        figure('Position', [300, 300, 1000, 500]);
+        
+        subplot(1, 2, 1);
+        histogram(rest_permen(~isnan(rest_permen)), 20, 'FaceColor', 'b', 'FaceAlpha', 0.6);
+        xlabel('排列熵值', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        ylabel('频数', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        title('静息阶段', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        grid on;
+        
+        subplot(1, 2, 2);
+        histogram(attention_permen(~isnan(attention_permen)), 20, 'FaceColor', 'r', 'FaceAlpha', 0.6);
+        xlabel('排列熵值', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        ylabel('频数', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        title('注意力阶段', 'FontName', 'SimSun', 'FontSize', font_sizes.subtitle);
+        grid on;
+    end
+    
     % 5.4 TBR分布直方图
     if ~isempty(rest_tbr) && ~isempty(attention_tbr)
         figure('Position', [400, 400, 1000, 500]);
@@ -199,6 +258,21 @@ try
         xlabel('样本熵', 'FontName', 'SimSun', 'FontSize', font_sizes.axis_label);
         ylabel('TBR', 'FontName', 'SimSun', 'FontSize', font_sizes.axis_label);
         title(['样本熵 vs TBR - ' display_filename], 'FontName', 'SimSun', ...
+              'FontSize', font_sizes.title, 'Interpreter', 'none');
+        legend({'静息', '注意力'}, 'FontName', 'SimSun', 'FontSize', font_sizes.legend);
+        grid on;
+        hold off;
+    end
+    
+    % 5.6 排列熵 vs TBR散点图
+    if ~isempty(rest_permen) && ~isempty(attention_permen)
+        figure('Position', [600, 600, 800, 600]);
+        hold on;
+        scatter(rest_permen(~isnan(rest_permen)), rest_tbr(~isnan(rest_permen)), 50, 'b', 'filled', 'MarkerFaceAlpha', 0.5);
+        scatter(attention_permen(~isnan(attention_permen)), attention_tbr(~isnan(attention_permen)), 50, 'r', 'filled', 'MarkerFaceAlpha', 0.5);
+        xlabel('排列熵', 'FontName', 'SimSun', 'FontSize', font_sizes.axis_label);
+        ylabel('TBR', 'FontName', 'SimSun', 'FontSize', font_sizes.axis_label);
+        title(['排列熵 vs TBR - ' display_filename], 'FontName', 'SimSun', ...
               'FontSize', font_sizes.title, 'Interpreter', 'none');
         legend({'静息', '注意力'}, 'FontName', 'SimSun', 'FontSize', font_sizes.legend);
         grid on;

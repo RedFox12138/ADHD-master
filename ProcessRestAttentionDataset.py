@@ -19,6 +19,8 @@ from EOGRemovalDATNet import eog_removal_datnet
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
+from SingleDenoise_CORRECTED import eog_removal_corrected
+
 # 设置中文字体和绘图风格
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'KaiTi', 'FangSong']
 plt.rcParams['axes.unicode_minus'] = False
@@ -115,10 +117,13 @@ def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, o
         print(f"    -> 正在进行预处理...")
         processed_signal, _ = preprocess3(signal, fs)
         
-        # 步骤2: 眼电去除（使用DATNet无监督方法）
+
         print(f"    -> 正在去除眼电（DATNet无监督网络）...")
-        cleaned_signal = eog_removal_datnet(processed_signal, fs, visualize=False)
-        
+        # cleaned_signal = eog_removal_datnet(processed_signal, fs, visualize=False)
+        cleaned_signal = eog_removal_corrected(processed_signal, fs, visualize=False)
+
+
+
         # 可视化对比
         if visualize:
             print(f"    -> 正在生成可视化图像...")
@@ -306,7 +311,7 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
 if __name__ == "__main__":
     # 配置参数
     input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\总和的mat'  # 包含原始mat文件的文件夹
-    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\预处理处理后的mat'  # 输出文件夹
+    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\总和的mat\\预处理处理后的mat'  # 输出文件夹
     figure_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\总和\\figures'  # 图像保存文件夹
     
     # 采样率和窗口参数

@@ -14,6 +14,14 @@ class AudioManager {
     // 当前播放的BGM
     this.currentBgm = null;
     
+    // 多个游戏BGM列表（随机播放）
+    this.gameBgmList = [
+      'game_bgm'
+    ];
+    
+    // 当前BGM索引
+    this.currentBgmIndex = -1;
+    
     // 初始化音效
     this.initSoundEffects();
   }
@@ -62,8 +70,14 @@ class AudioManager {
   }
   
   // 播放背景音乐（内置于游戏，使用InnerAudioContext）
-  playBGM(bgmName, title = '背景音乐') {
+  playBGM(bgmName, title = '背景音乐', enableRandomPlaylist = false) {
     if (!this.bgmEnabled) return;
+    
+    // 如果启用了随机播放列表模式
+    if (enableRandomPlaylist && bgmName === 'game_bgm') {
+      this.playRandomBGM();
+      return;
+    }
     
     // 如果正在播放相同的BGM，不重复播放
     if (this.currentBgm === bgmName && this.bgmAudio) return;
@@ -86,6 +100,60 @@ class AudioManager {
       // 错误处理（静默）
       this.bgmAudio.onError(() => {
         // 静默失败，不输出日志
+      });
+      
+      this.bgmAudio.play();
+    } catch (err) {
+      // 静默失败，不输出日志
+    }
+  }
+  
+  // 播放随机BGM（从播放列表中随机选择）
+  playRandomBGM() {
+    if (!this.bgmEnabled) return;
+    
+    // 停止之前的BGM
+    if (this.bgmAudio) {
+      this.bgmAudio.stop();
+      this.bgmAudio.destroy();
+    }
+    
+    try {
+      // 随机选择一个BGM（确保不重复上一首）
+      let randomIndex;
+      if (this.gameBgmList.length === 1) {
+        randomIndex = 0;
+      } else {
+        do {
+          randomIndex = Math.floor(Math.random() * this.gameBgmList.length);
+        } while (randomIndex === this.currentBgmIndex && this.gameBgmList.length > 1);
+      }
+      
+      this.currentBgmIndex = randomIndex;
+      const bgmName = this.gameBgmList[randomIndex];
+      this.currentBgm = bgmName;
+      
+      // 创建内部音频对象
+      this.bgmAudio = wx.createInnerAudioContext();
+      this.bgmAudio.src = `/audio/${bgmName}.mp3`;
+      this.bgmAudio.loop = false;  // 不循环，播放完后切换下一首
+      this.bgmAudio.volume = 0.3;  // BGM音量稍低
+      
+      // 播放结束后自动播放下一首
+      this.bgmAudio.onEnded(() => {
+        if (this.bgmEnabled) {
+          this.playRandomBGM();
+        }
+      });
+      
+      // 错误处理（如果某个BGM文件不存在，尝试播放下一首）
+      this.bgmAudio.onError(() => {
+        // 静默失败，尝试播放下一首
+        if (this.bgmEnabled) {
+          setTimeout(() => {
+            this.playRandomBGM();
+          }, 500);
+        }
       });
       
       this.bgmAudio.play();
