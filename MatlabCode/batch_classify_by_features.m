@@ -6,7 +6,7 @@ close all;
 clear all;
 
 % --- 用户需要设定的参数 ---
-input_folder = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\预处理处理后的mat'; % 输入文件夹路径
+input_folder = 'D:\Pycharm_Projects\ADHD-master\data\躲避游戏脑电数据\总和\总和的mat\预处理处理后的mat\6s'; % 输入文件夹路径
 output_folder_sampen_greater = 'D:\Pycharm_Projects\ADHD-master\data\分类结果\静息样本熵大于注意力'; % 静息样本熵 > 注意力样本熵
 output_folder_sampen_less = 'D:\Pycharm_Projects\ADHD-master\data\分类结果\静息样本熵小于注意力'; % 静息样本熵 < 注意力样本熵
 Fs = 250; % 采样率 (Hz)

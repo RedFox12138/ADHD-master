@@ -16,6 +16,12 @@
     <view class="alert-text">⚠️ 加油！集中注意力！</view>
   </view>
 
+  <!-- 大招激活特效 -->
+  <view class="ultimate-alert" wx:if="{{showUltimateEffect}}">
+    <view class="ultimate-text">🌟 超级火力激活！🌟</view>
+    <view class="ultimate-subtext">持续4秒</view>
+  </view>
+
   <!-- 启动封面 -->
   <view class="start-cover" wx:if="{{showStartCover}}">
     <image class="cover-image" src="/images/游戏封面.png" mode="aspectFit"></image>
@@ -133,6 +139,21 @@
         bindtouchmove="onMapTouchMove"
         bindtouchend="onMapTouchEnd">
     
+    <!-- 注意力进度条 - 游戏顶部 -->
+    <view class="attention-progress-bar" wx:if="{{baselineValue !== null}}">
+      <view class="attention-progress-bg">
+        <!-- 进度条填充（反向：样本熵越小，进度越高） -->
+        <view class="attention-progress-fill" style="width: {{attentionProgress}}%"></view>
+        <!-- 基准值红线 -->
+        <view class="baseline-marker" style="left: {{baselineProgress}}%"></view>
+      </view>
+      <view class="progress-labels">
+        <text class="label-left">注意力低</text>
+        <text class="label-center">基准：{{baselineValue}}</text>
+        <text class="label-right">注意力高</text>
+      </view>
+    </view>
+    
     <!-- 游戏背景图片 -->
     <image wx:if="{{gameBackground}}" class="game-background" src="{{gameBackground}}" mode="aspectFill"></image>
     
@@ -149,10 +170,12 @@
       </view>
 
       <!-- 炮台 -->
-      <view wx:for="{{turrets}}" wx:key="id" class="turret {{item.disabled ? 'turret-disabled' : ''}}" 
+      <view wx:for="{{turrets}}" wx:key="id" class="turret {{item.disabled ? 'turret-disabled' : ''}} {{item.ultimateActive ? 'turret-ultimate' : ''}}" 
             style="left: {{item.x}}rpx; top: {{item.y}}rpx; transform: translate(-50%, -50%) rotate({{item.rotation}}deg);">
-        <image wx:if="{{item.image}}" class="turret-image" src="{{item.image}}" mode="aspectFit"></image>
-        <view wx:else class="turret-body">🔫</view>
+        <image wx:if="{{item.image}}" class="turret-image {{item.ultimateActive ? 'ultimate-glow' : ''}}" src="{{item.image}}" mode="aspectFit"></image>
+        <view wx:else class="turret-body {{item.ultimateActive ? 'ultimate-glow' : ''}}">🔫</view>
+        <!-- 大招光环效果 -->
+        <view wx:if="{{item.ultimateActive}}" class="ultimate-aura"></view>
       </view>
 
       <!-- 怪物 -->

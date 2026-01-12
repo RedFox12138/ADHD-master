@@ -7,7 +7,8 @@
 clc;
 close all;
 clear all;
-
+perm_wt_val_w = 4;
+inv_alpha_val_w = 0.6;
 %% 设置图形不显示（避免在无显示环境中报错）
 set(0, 'DefaultFigureVisible', 'off');
 
@@ -62,15 +63,17 @@ addpath(fullfile(fileparts(mfilename('fullpath')), 'feature'));
 
 %% 定义要测试的特征
 % 线性频谱特征 + 非线性动力学特征
-% feature_names = {'SampEn', 'FuzzEn', 'MSEn_CI', ...
+% feature_names = {'SampEn', 'FuzzEn', 'XSampEn', 'SampEn2D', 'MvSampEn', ...  % 样本熵系列
+%                  'MSEn_CI', 'MvMSE', 'cMSEn', 'cXMSE', 'cMvMSE', ...  % 多尺度熵系列
 %                  'PermEn', 'PermEn_FineGrain', 'PermEn_Modified', 'PermEn_AmpAware', ...  % 排列熵系列
 %                  'PermEn_Weighted', 'PermEn_Edge', 'PermEn_Uniquant', 'XPermEn', ...  % 排列熵变体
 %                  'LZC', ...  % 其他复杂度特征
 %                  'HFD', 'FDD_Mean', 'FDD_Std', ...  % 分形特征
 %                  'TBR', 'Pope_Index', 'Inverse_Alpha', 'Beta_Alpha_Ratio', 'Spectral_Slope', ...  % 频谱特征
+%                  'WPE_IA_Product', 'WPE_IA_Weighted', 'WPE_IA_Ratio', 'WPE_IA_Composite', ...  % 组合特征
 %                  'Complexity_Activity', 'Complexity_Mobility', 'Complexity_Complexity'};  % Hjorth参数
 
-feature_names = {'PermEn_Weighted','Inverse_Alpha','Beta_Alpha_Ratio'};
+feature_names = {'SampEn','XSampEn','MvSampEn','MSEn_CI', 'MvMSE', 'cMSEn', 'cXMSE', 'cMvMSE','TBR'};
 n_features = length(feature_names);
 
 % 初始化多子目录存储结构: subfolder_features{子目录索引}.特征名.{rest/attention}
@@ -159,6 +162,84 @@ for subfolder_idx = 1:n_subfolders
                     subfolder_features{subfolder_idx}.FuzzEn.rest = [subfolder_features{subfolder_idx}.FuzzEn.rest; Fuzz(1)];
                 end
                 
+                % XSampEn: 交叉样本熵，分析前后两部分信号的交叉复杂度
+                if ismember('XSampEn', feature_names)
+                    try
+                        mid_point = floor(length(segment) / 2);
+                        if mid_point > 10
+                            sig1 = segment(1:mid_point);
+                            sig2 = segment(mid_point+1:end);
+                            XSamp = XSampEn(sig1, sig2);
+                            subfolder_features{subfolder_idx}.XSampEn.rest = [subfolder_features{subfolder_idx}.XSampEn.rest; XSamp(3)];
+                        else
+                            subfolder_features{subfolder_idx}.XSampEn.rest = [subfolder_features{subfolder_idx}.XSampEn.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.XSampEn.rest = [subfolder_features{subfolder_idx}.XSampEn.rest; NaN];
+                    end
+                end
+                
+                % SampEn2D: 二维样本熵，用于分析信号的二维模式复杂度
+                if ismember('SampEn2D', feature_names)
+                    try
+                        % 将一维信号转换为二维矩阵进行分析
+                        % 使用延迟嵌入将信号重构为矩阵
+                        embed_dim = 10;
+                        if length(segment) >= embed_dim * embed_dim
+                            mat_len = floor(length(segment) / embed_dim);
+                            sig_mat = reshape(segment(1:mat_len*embed_dim), embed_dim, mat_len);
+                            [SE2D, ~, ~] = SampEn2D(sig_mat);
+                            subfolder_features{subfolder_idx}.SampEn2D.rest = [subfolder_features{subfolder_idx}.SampEn2D.rest; SE2D];
+                        else
+                            subfolder_features{subfolder_idx}.SampEn2D.rest = [subfolder_features{subfolder_idx}.SampEn2D.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.SampEn2D.rest = [subfolder_features{subfolder_idx}.SampEn2D.rest; NaN];
+                    end
+                end
+                
+                % MvSampEn: 多变量样本熵，分析多通道信号的联合复杂度
+                if ismember('MvSampEn', feature_names)
+                    try
+                        % 将单通道信号分段作为多变量数据
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 10
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            [MSamp, ~, ~, ~] = MvSampEn(mv_data);
+                            subfolder_features{subfolder_idx}.MvSampEn.rest = [subfolder_features{subfolder_idx}.MvSampEn.rest; MSamp];
+                        else
+                            subfolder_features{subfolder_idx}.MvSampEn.rest = [subfolder_features{subfolder_idx}.MvSampEn.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.MvSampEn.rest = [subfolder_features{subfolder_idx}.MvSampEn.rest; NaN];
+                    end
+                end
+                
+                % MvMSE: 多变量多尺度熵，综合多通道多尺度的复杂度分析
+                if ismember('MvMSE', feature_names)
+                    try
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 30
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            Mobj = struct('Func', @MvSampEn);
+                            [~, CI] = MvMSEn(mv_data, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.MvMSE.rest = [subfolder_features{subfolder_idx}.MvMSE.rest; CI];
+                        else
+                            subfolder_features{subfolder_idx}.MvMSE.rest = [subfolder_features{subfolder_idx}.MvMSE.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.MvMSE.rest = [subfolder_features{subfolder_idx}.MvMSE.rest; NaN];
+                    end
+                end
+                
                 % MSEn: 多尺度熵，反映多时间尺度的复杂度
                 if ismember('MSEn_CI', feature_names)
                     try
@@ -167,6 +248,56 @@ for subfolder_idx = 1:n_subfolders
                         subfolder_features{subfolder_idx}.MSEn_CI.rest = [subfolder_features{subfolder_idx}.MSEn_CI.rest; CI];
                     catch
                         subfolder_features{subfolder_idx}.MSEn_CI.rest = [subfolder_features{subfolder_idx}.MSEn_CI.rest; NaN];
+                    end
+                end
+                
+                % cMSEn: 复合多尺度熵，改进的多尺度复杂度分析方法
+                if ismember('cMSEn', feature_names)
+                    try
+                        Mobj = struct('Func', @SampEn);
+                        [~, CI] = cMSEn(segment, Mobj, 'Scales', 5);
+                        subfolder_features{subfolder_idx}.cMSEn.rest = [subfolder_features{subfolder_idx}.cMSEn.rest; CI];
+                    catch
+                        subfolder_features{subfolder_idx}.cMSEn.rest = [subfolder_features{subfolder_idx}.cMSEn.rest; NaN];
+                    end
+                end
+                
+                % cXMSE: 复合多尺度交叉熵，分析两段信号的交叉多尺度复杂度
+                if ismember('cXMSE', feature_names)
+                    try
+                        mid_point = floor(length(segment) / 2);
+                        if mid_point > 30
+                            sig1 = segment(1:mid_point);
+                            sig2 = segment(mid_point+1:end);
+                            Mobj = struct('Func', @XSampEn);
+                            [~, CI] = cXMSEn(sig1, sig2, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.cXMSE.rest = [subfolder_features{subfolder_idx}.cXMSE.rest; CI];
+                        else
+                            subfolder_features{subfolder_idx}.cXMSE.rest = [subfolder_features{subfolder_idx}.cXMSE.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.cXMSE.rest = [subfolder_features{subfolder_idx}.cXMSE.rest; NaN];
+                    end
+                end
+                
+                % cMvMSE: 复合多变量多尺度熵，改进的多通道多尺度复杂度分析
+                if ismember('cMvMSE', feature_names)
+                    try
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 30
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            Mobj = struct('Func', @MvSampEn);
+                            [~, CI] = cMvMSEn(mv_data, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.cMvMSE.rest = [subfolder_features{subfolder_idx}.cMvMSE.rest; CI];
+                        else
+                            subfolder_features{subfolder_idx}.cMvMSE.rest = [subfolder_features{subfolder_idx}.cMvMSE.rest; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.cMvMSE.rest = [subfolder_features{subfolder_idx}.cMvMSE.rest; NaN];
                     end
                 end
                 
@@ -336,6 +467,60 @@ for subfolder_idx = 1:n_subfolders
                     end
                 end
                 
+                % === 组合特征: 加权排列熵 + Alpha倒数 ===
+                % 需要先计算或获取 PermEn_Weighted 和 Inverse_Alpha
+                if ismember('WPE_IA_Product', feature_names) || ismember('WPE_IA_Weighted', feature_names) || ...
+                   ismember('WPE_IA_Ratio', feature_names) || ismember('WPE_IA_Composite', feature_names)
+                    try
+                        % 获取加权排列熵值
+                        perm_wt_val = getPermEn(segment, 'variant', 'weighted');
+                        % 获取Alpha倒数值
+                        inv_alpha_val = calculateInverseAlpha(segment, Fs);
+                        
+                        % 1. 乘积特征: WPE × IA (直接增强两者的共同效应)
+                        if ismember('WPE_IA_Product', feature_names)
+                            wpe_ia_prod = perm_wt_val * inv_alpha_val;
+                            subfolder_features{subfolder_idx}.WPE_IA_Product.rest = [subfolder_features{subfolder_idx}.WPE_IA_Product.rest; wpe_ia_prod];
+                        end
+                        
+                        % 2. 加权和特征: 0.5*WPE_norm + 0.5*IA_norm (标准化后的线性组合)
+                        if ismember('WPE_IA_Weighted', feature_names)
+                            % 使用z-score标准化（基于当前样本的简单缩放）
+                            wpe_norm = perm_wt_val;
+                            ia_norm = inv_alpha_val;
+                            wpe_ia_weighted = 0.5 * wpe_norm + 0.5 * ia_norm;
+                            subfolder_features{subfolder_idx}.WPE_IA_Weighted.rest = [subfolder_features{subfolder_idx}.WPE_IA_Weighted.rest; wpe_ia_weighted];
+                        end
+                        
+                        % 3. 比值特征: WPE / (IA + epsilon) (相对强度指标)
+                        if ismember('WPE_IA_Ratio', feature_names)
+                            epsilon = 1e-6; % 避免除零
+                            wpe_ia_ratio = perm_wt_val / (inv_alpha_val + epsilon);
+                            subfolder_features{subfolder_idx}.WPE_IA_Ratio.rest = [subfolder_features{subfolder_idx}.WPE_IA_Ratio.rest; wpe_ia_ratio];
+                        end
+                        
+                        % 4. 复合指数: WPE^0.6 × IA^0.4 (非线性加权组合)
+                        if ismember('WPE_IA_Composite', feature_names)
+                            % 使用幂律组合，可以调整指数来改变权重，原始是0.6和0.4
+                            wpe_ia_composite = (perm_wt_val^perm_wt_val_w) * (inv_alpha_val^inv_alpha_val_w);
+                            subfolder_features{subfolder_idx}.WPE_IA_Composite.rest = [subfolder_features{subfolder_idx}.WPE_IA_Composite.rest; wpe_ia_composite];
+                        end
+                    catch
+                        if ismember('WPE_IA_Product', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Product.rest = [subfolder_features{subfolder_idx}.WPE_IA_Product.rest; NaN];
+                        end
+                        if ismember('WPE_IA_Weighted', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Weighted.rest = [subfolder_features{subfolder_idx}.WPE_IA_Weighted.rest; NaN];
+                        end
+                        if ismember('WPE_IA_Ratio', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Ratio.rest = [subfolder_features{subfolder_idx}.WPE_IA_Ratio.rest; NaN];
+                        end
+                        if ismember('WPE_IA_Composite', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Composite.rest = [subfolder_features{subfolder_idx}.WPE_IA_Composite.rest; NaN];
+                        end
+                    end
+                end
+                
                 % Spectral Slope: 1/f斜率，反映E/I平衡
                 if ismember('Spectral_Slope', feature_names)
                     try
@@ -380,6 +565,86 @@ for subfolder_idx = 1:n_subfolders
                     subfolder_features{subfolder_idx}.FuzzEn.attention = [subfolder_features{subfolder_idx}.FuzzEn.attention; Fuzz(1)];
                 end
                 
+                % XSampEn: 交叉样本熵，分析前后两部分信号的交叉复杂度
+                if ismember('XSampEn', feature_names)
+                    try
+                        mid_point = floor(length(segment) / 2);
+                        if mid_point > 10
+                            sig1 = segment(1:mid_point);
+                            sig2 = segment(mid_point+1:end);
+                            XSamp = XSampEn(sig1, sig2);
+                            subfolder_features{subfolder_idx}.XSampEn.attention = [subfolder_features{subfolder_idx}.XSampEn.attention; XSamp(3)];
+                        else
+                            subfolder_features{subfolder_idx}.XSampEn.attention = [subfolder_features{subfolder_idx}.XSampEn.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.XSampEn.attention = [subfolder_features{subfolder_idx}.XSampEn.attention; NaN];
+                    end
+                end
+                
+                % SampEn2D: 二维样本熵，用于分析信号的二维模式复杂度
+                if ismember('SampEn2D', feature_names)
+                    try
+                        % 将一维信号转换为二维矩阵进行分析
+                        % 使用延迟嵌入将信号重构为矩阵
+                        % SampEn2D要求矩阵的行和列都>10，所以使用15以确保满足要求
+                        embed_dim = 15;
+                        min_cols = 12;  % 确保列数也>10
+                        if length(segment) >= embed_dim * min_cols
+                            mat_len = floor(length(segment) / embed_dim);
+                            sig_mat = reshape(segment(1:mat_len*embed_dim), embed_dim, mat_len);
+                            [SE2D, ~, ~] = SampEn2D(sig_mat);
+                            subfolder_features{subfolder_idx}.SampEn2D.attention = [subfolder_features{subfolder_idx}.SampEn2D.attention; SE2D];
+                        else
+                            subfolder_features{subfolder_idx}.SampEn2D.attention = [subfolder_features{subfolder_idx}.SampEn2D.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.SampEn2D.attention = [subfolder_features{subfolder_idx}.SampEn2D.attention; NaN];
+                    end
+                end
+                
+                % MvSampEn: 多变量样本熵，分析多通道信号的联合复杂度
+                if ismember('MvSampEn', feature_names)
+                    try
+                        % 将单通道信号分段作为多变量数据
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 10
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            [MSamp, ~, ~, ~] = MvSampEn(mv_data);
+                            subfolder_features{subfolder_idx}.MvSampEn.attention = [subfolder_features{subfolder_idx}.MvSampEn.attention; MSamp];
+                        else
+                            subfolder_features{subfolder_idx}.MvSampEn.attention = [subfolder_features{subfolder_idx}.MvSampEn.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.MvSampEn.attention = [subfolder_features{subfolder_idx}.MvSampEn.attention; NaN];
+                    end
+                end
+                
+                % MvMSE: 多变量多尺度熵，综合多通道多尺度的复杂度分析
+                if ismember('MvMSE', feature_names)
+                    try
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 30
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            Mobj = struct('Func', @MvSampEn);
+                            [~, CI] = MvMSEn(mv_data, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.MvMSE.attention = [subfolder_features{subfolder_idx}.MvMSE.attention; CI];
+                        else
+                            subfolder_features{subfolder_idx}.MvMSE.attention = [subfolder_features{subfolder_idx}.MvMSE.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.MvMSE.attention = [subfolder_features{subfolder_idx}.MvMSE.attention; NaN];
+                    end
+                end
+                
                 % MSEn: 多尺度熵
                 if ismember('MSEn_CI', feature_names)
                     try
@@ -388,6 +653,56 @@ for subfolder_idx = 1:n_subfolders
                         subfolder_features{subfolder_idx}.MSEn_CI.attention = [subfolder_features{subfolder_idx}.MSEn_CI.attention; CI];
                     catch
                         subfolder_features{subfolder_idx}.MSEn_CI.attention = [subfolder_features{subfolder_idx}.MSEn_CI.attention; NaN];
+                    end
+                end
+                
+                % cMSEn: 复合多尺度熵，改进的多尺度复杂度分析方法
+                if ismember('cMSEn', feature_names)
+                    try
+                        Mobj = struct('Func', @SampEn);
+                        [~, CI] = cMSEn(segment, Mobj, 'Scales', 5);
+                        subfolder_features{subfolder_idx}.cMSEn.attention = [subfolder_features{subfolder_idx}.cMSEn.attention; CI];
+                    catch
+                        subfolder_features{subfolder_idx}.cMSEn.attention = [subfolder_features{subfolder_idx}.cMSEn.attention; NaN];
+                    end
+                end
+                
+                % cXMSE: 复合多尺度交叉熵，分析两段信号的交叉多尺度复杂度
+                if ismember('cXMSE', feature_names)
+                    try
+                        mid_point = floor(length(segment) / 2);
+                        if mid_point > 30
+                            sig1 = segment(1:mid_point);
+                            sig2 = segment(mid_point+1:end);
+                            Mobj = struct('Func', @XSampEn);
+                            [~, CI] = cXMSEn(sig1, sig2, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.cXMSE.attention = [subfolder_features{subfolder_idx}.cXMSE.attention; CI];
+                        else
+                            subfolder_features{subfolder_idx}.cXMSE.attention = [subfolder_features{subfolder_idx}.cXMSE.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.cXMSE.attention = [subfolder_features{subfolder_idx}.cXMSE.attention; NaN];
+                    end
+                end
+                
+                % cMvMSE: 复合多变量多尺度熵，改进的多通道多尺度复杂度分析
+                if ismember('cMvMSE', feature_names)
+                    try
+                        n_channels = 3;
+                        seg_len = floor(length(segment) / n_channels);
+                        if seg_len > 30
+                            mv_data = zeros(seg_len, n_channels);
+                            for ch = 1:n_channels
+                                mv_data(:, ch) = segment((ch-1)*seg_len+1:ch*seg_len);
+                            end
+                            Mobj = struct('Func', @MvSampEn);
+                            [~, CI] = cMvMSEn(mv_data, Mobj, 'Scales', 3);
+                            subfolder_features{subfolder_idx}.cMvMSE.attention = [subfolder_features{subfolder_idx}.cMvMSE.attention; CI];
+                        else
+                            subfolder_features{subfolder_idx}.cMvMSE.attention = [subfolder_features{subfolder_idx}.cMvMSE.attention; NaN];
+                        end
+                    catch
+                        subfolder_features{subfolder_idx}.cMvMSE.attention = [subfolder_features{subfolder_idx}.cMvMSE.attention; NaN];
                     end
                 end
                 
@@ -554,6 +869,60 @@ for subfolder_idx = 1:n_subfolders
                         subfolder_features{subfolder_idx}.Beta_Alpha_Ratio.attention = [subfolder_features{subfolder_idx}.Beta_Alpha_Ratio.attention; ba_ratio];
                     catch
                         subfolder_features{subfolder_idx}.Beta_Alpha_Ratio.attention = [subfolder_features{subfolder_idx}.Beta_Alpha_Ratio.attention; NaN];
+                    end
+                end
+                
+                % === 组合特征: 加权排列熵 + Alpha倒数 ===
+                % 需要先计算或获取 PermEn_Weighted 和 Inverse_Alpha
+                if ismember('WPE_IA_Product', feature_names) || ismember('WPE_IA_Weighted', feature_names) || ...
+                   ismember('WPE_IA_Ratio', feature_names) || ismember('WPE_IA_Composite', feature_names)
+                    try
+                        % 获取加权排列熵值
+                        perm_wt_val = getPermEn(segment, 'variant', 'weighted');
+                        % 获取Alpha倒数值
+                        inv_alpha_val = calculateInverseAlpha(segment, Fs);
+                        
+                        % 1. 乘积特征: WPE × IA (直接增强两者的共同效应)
+                        if ismember('WPE_IA_Product', feature_names)
+                            wpe_ia_prod = perm_wt_val * inv_alpha_val;
+                            subfolder_features{subfolder_idx}.WPE_IA_Product.attention = [subfolder_features{subfolder_idx}.WPE_IA_Product.attention; wpe_ia_prod];
+                        end
+                        
+                        % 2. 加权和特征: 0.5*WPE_norm + 0.5*IA_norm (标准化后的线性组合)
+                        if ismember('WPE_IA_Weighted', feature_names)
+                            % 使用z-score标准化（基于当前样本的简单缩放）
+                            wpe_norm = perm_wt_val;
+                            ia_norm = inv_alpha_val;
+                            wpe_ia_weighted = 0.5 * wpe_norm + 0.5 * ia_norm;
+                            subfolder_features{subfolder_idx}.WPE_IA_Weighted.attention = [subfolder_features{subfolder_idx}.WPE_IA_Weighted.attention; wpe_ia_weighted];
+                        end
+                        
+                        % 3. 比值特征: WPE / (IA + epsilon) (相对强度指标)
+                        if ismember('WPE_IA_Ratio', feature_names)
+                            epsilon = 1e-6; % 避免除零
+                            wpe_ia_ratio = perm_wt_val / (inv_alpha_val + epsilon);
+                            subfolder_features{subfolder_idx}.WPE_IA_Ratio.attention = [subfolder_features{subfolder_idx}.WPE_IA_Ratio.attention; wpe_ia_ratio];
+                        end
+                        
+                        % 4. 复合指数: WPE^0.6 × IA^0.4 (非线性加权组合)
+                        if ismember('WPE_IA_Composite', feature_names)
+                            % 使用幂律组合，可以调整指数来改变权重
+                            wpe_ia_composite = (perm_wt_val^perm_wt_val_w) * (inv_alpha_val^inv_alpha_val_w);
+                            subfolder_features{subfolder_idx}.WPE_IA_Composite.attention = [subfolder_features{subfolder_idx}.WPE_IA_Composite.attention; wpe_ia_composite];
+                        end
+                    catch
+                        if ismember('WPE_IA_Product', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Product.attention = [subfolder_features{subfolder_idx}.WPE_IA_Product.attention; NaN];
+                        end
+                        if ismember('WPE_IA_Weighted', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Weighted.attention = [subfolder_features{subfolder_idx}.WPE_IA_Weighted.attention; NaN];
+                        end
+                        if ismember('WPE_IA_Ratio', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Ratio.attention = [subfolder_features{subfolder_idx}.WPE_IA_Ratio.attention; NaN];
+                        end
+                        if ismember('WPE_IA_Composite', feature_names)
+                            subfolder_features{subfolder_idx}.WPE_IA_Composite.attention = [subfolder_features{subfolder_idx}.WPE_IA_Composite.attention; NaN];
+                        end
                     end
                 end
                 
@@ -774,7 +1143,7 @@ end
 
 % 子图2: 各子目录的平均推荐度
 subplot(1, 2, 2);
-bar(subfolder_avg_scores);
+bar(subfolder_avg_scores); 
 set(gca, 'XTickLabel', subfolder_names, 'XTickLabelRotation', 45);
 xlabel('子目录名称', 'FontSize', 12);
 ylabel('平均推荐度', 'FontSize', 12);
@@ -1046,12 +1415,217 @@ if ~exist(subject_comparison_folder, 'dir')
     mkdir(subject_comparison_folder);
 end
 
+% === 新增：为每个特征生成受试者（子目录）均值和方差的柱状图 ===
+fprintf('\n生成各特征的受试者均值方差柱状图...\n');
+
+for feat_idx = 1:n_features
+    feat_name = feature_names{feat_idx};
+    
+    fprintf('  生成特征 %s 的受试者均值方差柱状图...\n', feat_name);
+    
+    % 计算每个子目录（受试者）的均值和标准差
+    subfolder_means_rest = zeros(1, n_subfolders);
+    subfolder_stds_rest = zeros(1, n_subfolders);
+    subfolder_means_attention = zeros(1, n_subfolders);
+    subfolder_stds_attention = zeros(1, n_subfolders);
+    subfolder_means_combined = zeros(1, n_subfolders);
+    subfolder_stds_combined = zeros(1, n_subfolders);
+    
+    for s = 1:n_subfolders
+        % 静息态数据
+        rest_data = subfolder_features{s}.(feat_name).rest;
+        rest_data = rest_data(~isnan(rest_data) & ~isinf(rest_data));
+        if ~isempty(rest_data)
+            subfolder_means_rest(s) = mean(rest_data);
+            subfolder_stds_rest(s) = std(rest_data);
+        else
+            subfolder_means_rest(s) = NaN;
+            subfolder_stds_rest(s) = NaN;
+        end
+        
+        % 注意力态数据
+        attention_data = subfolder_features{s}.(feat_name).attention;
+        attention_data = attention_data(~isnan(attention_data) & ~isinf(attention_data));
+        if ~isempty(attention_data)
+            subfolder_means_attention(s) = mean(attention_data);
+            subfolder_stds_attention(s) = std(attention_data);
+        else
+            subfolder_means_attention(s) = NaN;
+            subfolder_stds_attention(s) = NaN;
+        end
+        
+        % 合并数据（静息+注意力）
+        combined_data = [rest_data; attention_data];
+        if ~isempty(combined_data)
+            subfolder_means_combined(s) = mean(combined_data);
+            subfolder_stds_combined(s) = std(combined_data);
+        else
+            subfolder_means_combined(s) = NaN;
+            subfolder_stds_combined(s) = NaN;
+        end
+    end
+    
+    % === 图1：静息态 vs 注意力态分组柱状图 ===
+    fig_grouped = figure('Position', [100, 100, max(1200, n_subfolders*120), 700], 'Visible', 'off');
+    
+    % 准备分组柱状图数据
+    bar_data = [subfolder_means_rest; subfolder_means_attention]';
+    
+    % 绘制分组柱状图
+    hold on;
+    b = bar(1:n_subfolders, bar_data, 'grouped');
+    b(1).FaceColor = [0.2 0.6 0.8];  % 蓝色 - 静息态
+    b(2).FaceColor = [0.8 0.4 0.2];  % 橙色 - 注意力态
+    
+    % 添加误差棒
+    x1 = b(1).XEndPoints;
+    x2 = b(2).XEndPoints;
+    errorbar(x1, subfolder_means_rest, subfolder_stds_rest, 'k.', 'LineWidth', 1.5, 'CapSize', 8);
+    errorbar(x2, subfolder_means_attention, subfolder_stds_attention, 'k.', 'LineWidth', 1.5, 'CapSize', 8);
+    
+    % 设置图表属性
+    grid on;
+    xlabel('受试者（子目录）', 'FontSize', 12, 'FontWeight', 'bold');
+    ylabel(sprintf('%s 特征值（均值 ± 标准差）', feat_name), 'FontSize', 12, 'FontWeight', 'bold');
+    title(sprintf('特征 %s - 各受试者静息态vs注意力态对比', feat_name), ...
+          'FontSize', 14, 'FontWeight', 'bold');
+    
+    % 设置x轴标签
+    set(gca, 'XTick', 1:n_subfolders, 'XTickLabel', subfolder_names, 'XTickLabelRotation', 45);
+    xlim([0.5, n_subfolders+0.5]);
+    
+    % 智能调整y轴范围，让差异更明显
+    % 计算所有数据的范围（包括误差棒）
+    all_data_with_error = [subfolder_means_rest - subfolder_stds_rest, ...
+                           subfolder_means_rest + subfolder_stds_rest, ...
+                           subfolder_means_attention - subfolder_stds_attention, ...
+                           subfolder_means_attention + subfolder_stds_attention];
+    valid_data = all_data_with_error(~isnan(all_data_with_error) & ~isinf(all_data_with_error));
+    
+    if ~isempty(valid_data)
+        data_min = min(valid_data);
+        data_max = max(valid_data);
+        data_range = data_max - data_min;
+        
+        % 如果数据范围很小（相对于均值），使用紧凑的y轴范围
+        data_mean = mean(valid_data);
+        if data_range / abs(data_mean) < 0.1 && data_range > 0
+            % 数据变化小于均值的10%，使用紧凑视图
+            y_margin = data_range * 0.15;  % 上下各留15%余量
+            ylim([data_min - y_margin, data_max + y_margin]);
+        elseif data_min > 0 && data_min / data_max > 0.5
+            % 所有数据都是正数且最小值不接近0，不从0开始
+            y_margin = data_range * 0.1;  % 上下各留10%余量
+            ylim([data_min - y_margin, data_max + y_margin]);
+        else
+            % 使用默认的从0开始，但留10%上边距
+            ylim([0, data_max * 1.1]);
+        end
+    end
+    
+    % 添加图例
+    legend({'静息态', '注意力态'}, 'Location', 'best', 'FontSize', 11);
+    
+    % 添加统计信息
+    overall_mean_rest = nanmean(subfolder_means_rest);
+    overall_mean_attention = nanmean(subfolder_means_attention);
+    text(0.02, 0.98, sprintf('受试者数=%d | 静息均值=%.4f | 注意力均值=%.4f | 差异=%.4f', ...
+         n_subfolders, overall_mean_rest, overall_mean_attention, overall_mean_attention - overall_mean_rest), ...
+         'Units', 'normalized', 'VerticalAlignment', 'top', 'FontSize', 10, ...
+         'BackgroundColor', 'white', 'EdgeColor', 'black');
+    
+    hold off;
+    
+    % 保存分组柱状图
+    fig_grouped_path = fullfile(subject_comparison_folder, sprintf('%s_受试者均值对比_分组.png', feat_name));
+    saveas(fig_grouped, fig_grouped_path);
+    close(fig_grouped);
+    
+    % === 图2：合并数据的柱状图（所有样本） ===
+    fig_combined = figure('Position', [100, 100, max(1200, n_subfolders*100), 600], 'Visible', 'off');
+    
+    hold on;
+    b = bar(1:n_subfolders, subfolder_means_combined, 'FaceColor', [0.3 0.7 0.3], 'EdgeColor', 'k', 'LineWidth', 1);
+    
+    % 添加误差棒
+    errorbar(1:n_subfolders, subfolder_means_combined, subfolder_stds_combined, ...
+             'k.', 'LineWidth', 1.5, 'CapSize', 10);
+    
+    % 设置图表属性
+    grid on;
+    xlabel('受试者（子目录）', 'FontSize', 12, 'FontWeight', 'bold');
+    ylabel(sprintf('%s 特征值（均值 ± 标准差）', feat_name), 'FontSize', 12, 'FontWeight', 'bold');
+    title(sprintf('特征 %s - 各受试者整体均值对比', feat_name), ...
+          'FontSize', 14, 'FontWeight', 'bold');
+    
+    % 设置x轴标签
+    set(gca, 'XTick', 1:n_subfolders, 'XTickLabel', subfolder_names, 'XTickLabelRotation', 45);
+    xlim([0.5, n_subfolders+0.5]);
+    
+    % 智能调整y轴范围
+    all_data_with_error = [subfolder_means_combined - subfolder_stds_combined, ...
+                           subfolder_means_combined + subfolder_stds_combined];
+    valid_data = all_data_with_error(~isnan(all_data_with_error) & ~isinf(all_data_with_error));
+    
+    if ~isempty(valid_data)
+        data_min = min(valid_data);
+        data_max = max(valid_data);
+        data_range = data_max - data_min;
+        data_mean = mean(valid_data);
+        
+        % 根据数据特性调整y轴
+        if data_range / abs(data_mean) < 0.1 && data_range > 0
+            % 数据变化小，使用紧凑视图
+            y_margin = data_range * 0.15;
+            ylim([data_min - y_margin, data_max + y_margin]);
+        elseif data_min > 0 && data_min / data_max > 0.5
+            % 不从0开始
+            y_margin = data_range * 0.1;
+            ylim([data_min - y_margin, data_max + y_margin]);
+        else
+            % 从0开始
+            ylim([0, data_max * 1.1]);
+        end
+    end
+    
+    % 在每个柱子上方显示均值
+    for s = 1:n_subfolders
+        if ~isnan(subfolder_means_combined(s))
+            text(s, subfolder_means_combined(s) + subfolder_stds_combined(s), ...
+                 sprintf('%.3f', subfolder_means_combined(s)), ...
+                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
+                 'FontSize', 9, 'Color', 'r', 'FontWeight', 'bold');
+        end
+    end
+    
+    % 添加统计信息
+    overall_mean = nanmean(subfolder_means_combined);
+    overall_std = nanstd(subfolder_means_combined);
+    cv = (overall_std / overall_mean) * 100;  % 变异系数
+    text(0.02, 0.98, sprintf('受试者数=%d | 整体均值=%.4f | 受试者间标准差=%.4f | 变异系数=%.2f%%', ...
+         n_subfolders, overall_mean, overall_std, cv), ...
+         'Units', 'normalized', 'VerticalAlignment', 'top', 'FontSize', 10, ...
+         'BackgroundColor', 'white', 'EdgeColor', 'black');
+    
+    hold off;
+    
+    % 保存合并柱状图
+    fig_combined_path = fullfile(subject_comparison_folder, sprintf('%s_受试者均值对比_整体.png', feat_name));
+    saveas(fig_combined, fig_combined_path);
+    close(fig_combined);
+end
+
+fprintf('受试者均值方差柱状图已保存到: %s\n', subject_comparison_folder);
+fprintf('  - 为每个特征（共%d个）生成了分组柱状图（静息态vs注意力态）\n', n_features);
+fprintf('  - 为每个特征（共%d个）生成了整体柱状图（合并所有样本）\n', n_features);
+
+% === 原有的箱型图代码保留（使用subject_features） ===
 % 为每个特征生成箱型图
 for feat_idx = 1:n_features
     feat_name = feature_names{feat_idx};
     
     if isempty(subject_features.(feat_name).data)
-        fprintf('  特征 %s 没有数据，跳过\n', feat_name);
+        fprintf('  特征 %s 没有数据，跳过箱型图\n', feat_name);
         continue;
     end
     
@@ -1170,9 +1744,11 @@ fig_cv_path = fullfile(subject_comparison_folder, '特征变异系数对比.png'
 saveas(fig_cv, fig_cv_path);
 close(fig_cv);
 
-fprintf('受试者对比箱型图已保存到: %s\n', subject_comparison_folder);
-fprintf('  - 为每个特征（共%d个）生成了受试者对比箱型图\n', n_features);
-fprintf('  - 保存了特征变异系数对比图\n');
+fprintf('\n所有受试者对比图表已完成:\n');
+fprintf('  - 受试者均值柱状图（分组）: %d张\n', n_features);
+fprintf('  - 受试者均值柱状图（整体）: %d张\n', n_features);
+fprintf('  - 受试者对比箱型图: 根据数据可用性生成\n');
+fprintf('  - 特征变异系数对比图: 1张\n');
 
 
 %% 保存结果
@@ -1232,7 +1808,10 @@ fprintf('\n生成的图表总结:\n');
 fprintf('  - 综合对比图: 2张 (子目录综合比较, 各特征在不同子目录的表现)\n');
 fprintf('  - 最佳子目录图: 2张 (特征箱线图, Top3特征密度图)\n');
 fprintf('  - 各子目录详细图: %d张 (每个子目录2张)\n', n_subfolders * 2);
-fprintf('  - 受试者对比图: %d张 (每个特征的箱型图)\n', n_features);
+fprintf('  - 受试者均值柱状图: %d张 (每个特征2张: 分组+整体)\n', n_features * 2);
+fprintf('  - 受试者对比箱型图: 根据数据可用性生成\n');
+fprintf('  - 受试者变异系数图: 1张\n');
+fprintf('  总计约: %d 张主要图表\n', 5 + n_subfolders*2 + n_features*2);
 fprintf('  - 特征变异系数图: 1张\n');
 fprintf('  总计约 %d 张图表\n', 4 + n_subfolders * 2 + n_features + 1);
 fprintf('\n所有图表均保存在: %s\n', figure_folder);

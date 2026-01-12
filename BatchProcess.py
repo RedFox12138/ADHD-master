@@ -23,7 +23,7 @@ def process_txt_file(txt_path, output_folder, fs=250, eog_strength=0.7):
     processed_signal,_ = preprocess3(data, fs)
 
     # 眼电去除（使用可调节的强度参数）
-    processed_signal = eog_removal_corrected(processed_signal, fs, visualize=True)
+    processed_signal = eog_removal_corrected(processed_signal, fs, visualize=False)
 
 
 
@@ -96,8 +96,8 @@ def batch_process_txt_folder(input_folder, output_folder, eog_strength=0.7):
 
 # 使用示例
 if __name__ == "__main__":
-    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号'  # 替换为你的txt文件夹路径
-    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\额头信号去眼电'  # 替换为你想保存处理后的txt文件的文件夹
+    input_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\TXT文件'  # 替换为你的txt文件夹路径
+    output_folder = 'D:\\Pycharm_Projects\\ADHD-master\\data\\躲避游戏脑电数据\\微信小程序\\TXT文件\\预处理后的完整数据，未分段'  # 替换为你想保存处理后的txt文件的文件夹
     
     # 眼电去除强度参数（可调节）
     # 0.3-0.5: 温和去除，保留更多信号

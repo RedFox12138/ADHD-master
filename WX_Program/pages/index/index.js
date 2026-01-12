@@ -143,7 +143,20 @@ Page({
     attentionLowStartTime: null,  // 注意力低下开始时间
     showAttentionAlert: false,    // 是否显示注意力提醒
     lastAlertTime: 0,             // 上次显示提醒的时间（秒数）
-    lastDamageTime: 0             // 上次损坏炮台的时间（秒数）
+    lastDamageTime: 0,            // 上次损坏炮台的时间（秒数）
+    lastBaselineAdjustTime: 0,    // 上次调整基准值的时间（秒数）
+    
+    attentionHighStartTime: null, // 注意力高于基准开始时间
+    lastRewardTime: 0,            // 上次奖励大招的时间（秒数）
+    lastBaselineDecreaseTime: 0,  // 上次降低基准值的时间（秒数）
+    
+    // 大招系统
+    showUltimateEffect: false,    // 是否显示大招特效
+    ultimateTurretId: null,       // 获得大招的炮台ID
+    
+    // 注意力进度条显示
+    attentionProgress: 0,         // 当前注意力进度（0-100）
+    baselineProgress: 50          // 基准值在进度条上的位置（0-100）
   },
 
   onLoad: function() {
@@ -564,17 +577,28 @@ Page({
       // 修复：使用本地 currentPhase 作为备用判断，防止服务器 Step 字段缺失
       this.setData({
         currentAttention: tbrSnap
+      }, () => {
+        // 更新后计算进度条
+        this.calculateAttentionProgress();
       });
       
       // 注意力监测：检测样本熵持续高于基准值的时间
       if (this.data.baselineValue != null && !this.data.gameOver) {
         if (tbrSnap > this.data.baselineValue) {
           // 样本熵高于基准值（注意力不集中）
+          // 重置注意力高的计时
+          if (this.data.attentionHighStartTime !== null) {
+            this.data.attentionHighStartTime = null;
+            this.data.lastRewardTime = 0;
+            this.data.lastBaselineDecreaseTime = 0;
+          }
+          
           if (this.data.attentionLowStartTime === null) {
             // 开始计时
             this.data.attentionLowStartTime = Date.now();
             this.data.lastAlertTime = 0;
             this.data.lastDamageTime = 0;
+            this.data.lastBaselineAdjustTime = 0;
           } else {
             // 计算已持续的秒数
             const duration = Math.floor((Date.now() - this.data.attentionLowStartTime) / 1000);
@@ -591,21 +615,60 @@ Page({
               }, 3000);
             }
             
-            // 每12秒损坏一个炮台（12秒、24秒、36秒...）
+            // 每12秒损坏一个炮台并升高基准值（12秒、24秒、36秒...）
             const currentDamageCycle = Math.floor(duration / 12);
             if (currentDamageCycle > this.data.lastDamageTime && duration >= 12) {
               this.data.lastDamageTime = currentDamageCycle;
               this.damageTurret();
+              
+              // 同时升高基准值（乘以1.10，让用户更容易达到）
+              const newBaseline = Math.round(this.data.baselineValue * 1.10 * 100) / 100;
+              this.setData({ baselineValue: newBaseline });
+              
+              wx.showToast({
+                title: `基准值调高至 ${newBaseline}`,
+                icon: 'none',
+                duration: 2000
+              });
+              
+              console.log(`[基准值调整] 注意力低下12s，基准值升高：${this.data.baselineValue} → ${newBaseline}`);
             }
           }
         } else {
-          // 样本熵低于或等于基准值，重置计时并恢复炮台
+          // 样本熵低于基准值（注意力集中）
+          // 重置注意力低的计时
           if (this.data.attentionLowStartTime !== null) {
             this.repairAllTurrets();
+            this.data.attentionLowStartTime = null;
+            this.data.lastAlertTime = 0;
+            this.data.lastDamageTime = 0;
+            this.data.lastBaselineAdjustTime = 0;
           }
-          this.data.attentionLowStartTime = null;
-          this.data.lastAlertTime = 0;
-          this.data.lastDamageTime = 0;
+          
+          if (this.data.attentionHighStartTime === null) {
+            // 开始计时注意力高于基准
+            this.data.attentionHighStartTime = Date.now();
+            this.data.lastRewardTime = 0;
+            this.data.lastBaselineDecreaseTime = 0;
+          } else {
+            // 计算已持续的秒数
+            const duration = Math.floor((Date.now() - this.data.attentionHighStartTime) / 1000);
+            
+            // 每12秒降低基准值并给予奖励大招（12秒、24秒、36秒...）
+            const currentRewardCycle = Math.floor(duration / 12);
+            if (currentRewardCycle > this.data.lastRewardTime && duration >= 12) {
+              this.data.lastRewardTime = currentRewardCycle;
+              
+              // 降低基准值（乘以0.95，让用户更难达到）
+              const newBaseline = Math.round(this.data.baselineValue * 0.95 * 100) / 100;
+              this.setData({ baselineValue: newBaseline });
+              
+              // 触发奖励大招
+              this.activateUltimateSkill();
+              
+              console.log(`[基准值调整] 注意力集中12s，基准值降低：${this.data.baselineValue} → ${newBaseline}`);
+            }
+          }
         }
       }
       
@@ -674,6 +737,111 @@ Page({
       });
       audioManager.playSound('button_click');
     }
+  },
+  
+  // 激活大招（注意力持续集中12秒的奖励）
+  activateUltimateSkill: function() {
+    const turrets = this.data.turrets;
+    // 找到所有未损坏的炮台
+    const activeTurrets = turrets.filter(t => !t.disabled);
+    
+    if (activeTurrets.length === 0) {
+      console.log('[大招] 没有可用的炮台');
+      return;
+    }
+    
+    // 随机选择一个炮台
+    const randomIndex = Math.floor(Math.random() * activeTurrets.length);
+    const selectedTurret = activeTurrets[randomIndex];
+    
+    // 找到该炮台在数组中的位置
+    const turretIndex = turrets.findIndex(t => t.id === selectedTurret.id);
+    if (turretIndex === -1) return;
+    
+    // 保存原始属性
+    const originalRange = GAME_CONFIG.turret.range;
+    const originalDamage = turrets[turretIndex].damage || GAME_CONFIG.turret.initialDamage;
+    
+    // 设置大招效果（超快射击速度和远距离）
+    turrets[turretIndex].ultimateActive = true;
+    turrets[turretIndex].ultimateRange = originalRange * 2.5; // 射程扩大2.5倍
+    turrets[turretIndex].damage = originalDamage * 3; // 伤害提升3倍
+    
+    this.setData({ 
+      turrets,
+      showUltimateEffect: true,
+      ultimateTurretId: selectedTurret.id
+    });
+    
+    // 显示大招提示
+    wx.showToast({
+      title: '🌟 大招激活！超级火力！',
+      icon: 'none',
+      duration: 2000
+    });
+    
+    // 播放特效音效
+    audioManager.playSound('button_click');
+    
+    console.log(`[大招] 炮台 ${selectedTurret.id} 激活大招，持续4秒`);
+    
+    // 启动超快射击（每100ms攻击一次）
+    const ultimateAttackInterval = setInterval(() => {
+      if (!this.data.gameOver && turrets[turretIndex]) {
+        this.performUltimateTurretAttack(turrets[turretIndex]);
+      }
+    }, 100); // 超快射击速度
+    
+    // 4秒后恢复正常
+    setTimeout(() => {
+      clearInterval(ultimateAttackInterval);
+      
+      if (turretIndex < turrets.length && turrets[turretIndex]) {
+        turrets[turretIndex].ultimateActive = false;
+        turrets[turretIndex].ultimateRange = null;
+        turrets[turretIndex].damage = originalDamage;
+        
+        this.setData({ 
+          turrets,
+          showUltimateEffect: false,
+          ultimateTurretId: null
+        });
+        
+        console.log(`[大招] 炮台 ${selectedTurret.id} 大招结束`);
+      }
+    }, 4000);
+  },
+  
+  // 执行大招炮台的超级攻击
+  performUltimateTurretAttack: function(turret) {
+    if (turret.disabled) return;
+    
+    const monsters = this.data.monsters;
+    const bullets = [...this.data.bullets];
+    const range = turret.ultimateRange || GAME_CONFIG.turret.range;
+    
+    // 寻找攻击范围内的所有怪物
+    const targetsInRange = monsters
+      .filter(monster => {
+        const dx = monster.x - turret.x;
+        const dy = monster.y - turret.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance <= range;
+      })
+      .sort((a, b) => {
+        // 优先攻击距离炮台最近的
+        const distA = Math.sqrt((a.x - turret.x) ** 2 + (a.y - turret.y) ** 2);
+        const distB = Math.sqrt((b.x - turret.x) ** 2 + (b.y - turret.y) ** 2);
+        return distA - distB;
+      });
+    
+    // 大招模式：同时攻击最多5个目标
+    const targetCount = Math.min(5, targetsInRange.length);
+    for (let i = 0; i < targetCount; i++) {
+      this.fireBullet(turret, targetsInRange[i], bullets);
+    }
+    
+    this.setData({ bullets });
   },
   
   // ========================================
@@ -763,7 +931,15 @@ Page({
       attentionLowStartTime: null,
       showAttentionAlert: false,
       lastAlertTime: 0,
-      lastDamageTime: 0
+      lastDamageTime: 0,
+      lastBaselineAdjustTime: 0,
+      attentionHighStartTime: null,
+      lastRewardTime: 0,
+      lastBaselineDecreaseTime: 0,
+      showUltimateEffect: false,
+      ultimateTurretId: null,
+      attentionProgress: 0,
+      baselineProgress: 50
     });
     
     this.startPhaseTimer();
@@ -837,7 +1013,15 @@ Page({
       attentionLowStartTime: null,
       showAttentionAlert: false,
       lastAlertTime: 0,
-      lastDamageTime: 0
+      lastDamageTime: 0,
+      lastBaselineAdjustTime: 0,
+      attentionHighStartTime: null,
+      lastRewardTime: 0,
+      lastBaselineDecreaseTime: 0,
+      showUltimateEffect: false,
+      ultimateTurretId: null,
+      attentionProgress: 0,
+      baselineProgress: 50
     });
   },
 
@@ -894,7 +1078,8 @@ Page({
             
             that.setData({
               baselineValue,
-              currentPhase: '治疗阶段'
+              currentPhase: '治疗阶段',
+              baselineProgress: 50  // 基准值固定在50%位置
             });
           } else {
             wx.showToast({ title: '基准数据不足', icon: 'none' });
@@ -971,6 +1156,17 @@ Page({
       experimentStarted: false,
       showGamePrompt: false,
       survivedTime: 0,
+      attentionProgress: 0,
+      baselineProgress: 50,
+      attentionLowStartTime: null,
+      attentionHighStartTime: null,
+      lastAlertTime: 0,
+      lastDamageTime: 0,
+      lastBaselineAdjustTime: 0,
+      lastRewardTime: 0,
+      lastBaselineDecreaseTime: 0,
+      showUltimateEffect: false,
+      ultimateTurretId: null,
       // 重置游戏状态
       town: {
         x: GAME_CONFIG.town.x,
@@ -1714,6 +1910,37 @@ Page({
     audioManager.playSound('button_click');
     this.setData({
       showDataPanel: !this.data.showDataPanel
+    });
+  },
+  
+  // 计算注意力进度条（反向：样本熵越小，进度越高）
+  calculateAttentionProgress: function() {
+    const { baselineValue, currentAttention } = this.data;
+    
+    if (baselineValue === null || currentAttention === null) {
+      return;
+    }
+    
+    // 定义范围：以基准值为中心，向上下扩展
+    // 假设样本熵范围是 baselineValue ± 50%
+    const range = baselineValue * 0.5;
+    const minValue = baselineValue - range;  // 注意力最高时的样本熵
+    const maxValue = baselineValue + range;  // 注意力最低时的样本熵
+    
+    // 计算当前注意力在范围中的位置（反向）
+    // 样本熵越小，进度越高（接近100%）
+    // 样本熵越大，进度越低（接近0%）
+    let progress = ((maxValue - currentAttention) / (maxValue - minValue)) * 100;
+    
+    // 限制在 0-100 之间
+    progress = Math.max(0, Math.min(100, progress));
+    
+    // 基准值的位置（永远在 50% 处）
+    const baselineProgress = 50;
+    
+    this.setData({
+      attentionProgress: progress.toFixed(1),
+      baselineProgress: baselineProgress
     });
   },
 

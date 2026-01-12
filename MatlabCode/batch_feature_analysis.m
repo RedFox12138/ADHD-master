@@ -33,14 +33,17 @@ addpath(fullfile(fileparts(mfilename('fullpath')), 'feature'));
 
 %% 定义要测试的特征（与CalculateFeature.m保持一致）
 % 线性频谱特征 + 非线性动力学特征
-feature_names = {'SampEn', 'FuzzEn', 'MSEn_CI', ...
-                 'PermEn', 'PermEn_FineGrain', 'PermEn_Modified', 'PermEn_AmpAware', ...  % 排列熵系列
-                 'PermEn_Weighted', 'PermEn_Edge', 'PermEn_Uniquant', 'XPermEn', ...  % 排列熵变体
-                 'LZC', ...  % 其他复杂度特征
-                 'HFD', 'FDD_Mean', 'FDD_Std', ...  % 分形特征
-                 'TBR', 'Pope_Index', 'Inverse_Alpha', 'Beta_Alpha_Ratio', 'Spectral_Slope', ...  % 频谱特征
-                 'Complexity_Activity', 'Complexity_Mobility', 'Complexity_Complexity'};  % Hjorth参数
+% feature_names = {'SampEn', 'FuzzEn', 'XSampEn', 'SampEn2D', 'MvSampEn', ...  % 样本熵系列
+%                  'MSEn_CI', 'MvMSE', 'cMSEn', 'cXMSE', 'cMvMSE', ...  % 多尺度熵系列
+%                  'PermEn', 'PermEn_FineGrain', 'PermEn_Modified', 'PermEn_AmpAware', ...  % 排列熵系列
+%                  'PermEn_Weighted', 'PermEn_Edge', 'PermEn_Uniquant', 'XPermEn', ...  % 排列熵变体
+%                  'LZC', ...  % 其他复杂度特征
+%                  'HFD', 'FDD_Mean', 'FDD_Std', ...  % 分形特征
+%                  'TBR', 'Pope_Index', 'Inverse_Alpha', 'Beta_Alpha_Ratio', 'Spectral_Slope', ...  % 频谱特征
+%                  'WPE_IA_Product', 'WPE_IA_Weighted', 'WPE_IA_Ratio', 'WPE_IA_Composite', ...  % 组合特征
+%                  'Complexity_Activity', 'Complexity_Mobility', 'Complexity_Complexity'};  % Hjorth参数
 
+feature_names = {'SampEn','PermEn_Weighted','WPE_IA_Composite','Inverse_Alpha'};
 n_features = length(feature_names);
 
 fprintf('========== 特征分析脚本 ==========\n');
