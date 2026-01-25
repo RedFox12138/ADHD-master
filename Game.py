@@ -654,14 +654,14 @@ def run_experiment():
     """定义整个实验的执行顺序"""
     ensure_window()
 
-    # 第1阶段：静息/准备
-    preparation_phase(10)
-    resting_phase2(60)
-
-    transition_text = visual.TextStim(win, text="下一个任务：躲避游戏\n\n请用鼠标或方向键左右移动", height=0.1)
-    transition_text.draw()
-    win.flip()
-    core.wait(10)
+    # # 第1阶段：静息/准备
+    # preparation_phase(10)
+    # resting_phase2(10)
+    #
+    # transition_text = visual.TextStim(win, text="下一个任务：躲避游戏\n\n请用鼠标或方向键左右移动", height=0.1)
+    # transition_text.draw()
+    # win.flip()
+    # core.wait(10)
 
     # arithmetic_phase(60)
 
@@ -669,7 +669,7 @@ def run_experiment():
     win.close()
 
     # 运行 Pygame 游戏
-    run_dodge_game_phase(duration=60)
+    run_dodge_game_phase(duration=30)
 
     # 重新创建窗口并结束提示
     # final_win = visual.Window(fullscr=True, color=(-0.8, -0.8, -0.8), screen=0, units='norm')

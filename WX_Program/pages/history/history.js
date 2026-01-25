@@ -463,7 +463,9 @@ Page({
             const avgTime = Math.round(stats.avgTime || 0);
             const maxTime = stats.maxTime || 0;
             const trend = analysis.trend || 'stable';
-            const suggestion = analysis.suggestion || '继续加油！';
+            
+            // 默认使用硬编码建议，作为备选
+            const defaultSuggestion = analysis.suggestion || '继续加油！';
 
             this.setData({
               gameRecords: records,
@@ -471,12 +473,14 @@ Page({
               avgTime: avgTime,
               maxTime: maxTime,
               trend: trend,
-              suggestion: suggestion,
+              suggestion: "🤖 AI正在深度分析您的训练数据...\n(生成个性化建议可能需要5-10秒，请耐心等待)",
               analysis: analysis,
               loading: false,
               showChart: true
             }, () => {
               this.renderGameChart(records);
+              // 异步获取AI建议
+              this.getAIAdvice(user_id, defaultSuggestion);
             });
           } else {
             this.setData({
@@ -497,6 +501,69 @@ Page({
     }).catch(err => {
       console.error('[游戏记录] 获取用户ID失败:', err);
       this.setData({ loading: false });
+    });
+  },
+
+  // 获取AI训练建议
+  getAIAdvice: function(user_id, defaultSuggestion) {
+    console.log('[AI建议] 开始获取AI建议...');
+    wx.request({
+      url: 'https://xxyeeg.zicp.fun/getAIAdvice',
+      method: 'POST',
+      data: { userId: user_id },
+      success: (res) => {
+        if (res.data.success && res.data.advice) {
+          console.log('[AI建议] 获取成功:', res.data.advice);
+          this.setData({
+            suggestion: res.data.advice
+          });
+        } else {
+          console.warn('[AI建议] 获取失败:', res.data);
+          if (defaultSuggestion) {
+             this.setData({ suggestion: defaultSuggestion });
+          }
+        }
+      },
+      fail: (err) => {
+        console.error('[AI建议] 请求失败:', err);
+        // 失败时回退到本地规则
+        if (defaultSuggestion) {
+             this.setData({ suggestion: defaultSuggestion });
+        }
+      }
+    });
+  },
+
+  // 刷新AI建议
+  refreshAIAdvice: function() {
+    wx.showLoading({ title: '生成中...', mask: true });
+    
+    this.getUserId().then(user_id => {
+      wx.request({
+        url: 'https://xxyeeg.zicp.fun/getAIAdvice',
+        method: 'POST',
+        data: { userId: user_id },
+        success: (res) => {
+          wx.hideLoading();
+          if (res.data.success && res.data.advice) {
+            this.setData({
+              suggestion: res.data.advice
+            });
+            wx.showToast({ title: '建议已更新', icon: 'success' });
+          } else {
+            wx.showToast({ title: '获取失败', icon: 'none' });
+          }
+        },
+        fail: (err) => {
+          wx.hideLoading();
+          console.error('[AI建议刷新] 失败:', err);
+          wx.showToast({ title: '网络错误', icon: 'none' });
+        }
+      });
+    }).catch(err => {
+      wx.hideLoading();
+      console.error('[刷新AI建议] 获取用户ID失败:', err);
+      wx.showToast({ title: '获取用户ID失败', icon: 'none' });
     });
   },
 

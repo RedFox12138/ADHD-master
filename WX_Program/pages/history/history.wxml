@@ -59,9 +59,10 @@
     <view wx:if="{{suggestion}}" class="suggestion-card">
       <view class="suggestion-header">
         <text class="suggestion-icon">💡</text>
-        <text class="suggestion-title">智能分析与建议</text>
+        <text class="suggestion-title">AI智能分析与建议</text>
+        <button class="refresh-btn" bindtap="refreshAIAdvice" size="mini">🔄 刷新</button>
       </view>
-      <view class="suggestion-content">{{suggestion}}</view>
+      <text class="suggestion-content" user-select="true" space="ensp">{{suggestion}}</text>
     </view>
 
     <!-- 图表 -->

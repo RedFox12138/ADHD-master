@@ -81,10 +81,12 @@
   <!-- 底部操作按钮 -->
   <view class="bottom-actions">
     <button class="action-btn primary" bindtap="startDiscovery" disabled="{{discovering}}">
-      {{discovering ? '搜索中...' : '🔍 重新搜索'}}
+      <text class="btn-icon">{{discovering ? '🔄' : '🔍'}}</text>
+      <text class="btn-text">{{discovering ? '搜索中...' : '重新搜索设备'}}</text>
     </button>
     <button class="action-btn secondary" bindtap="stopDiscovery" disabled="{{!discovering}}">
-      ⏹️ 停止搜索
+      <text class="btn-icon">⏹️</text>
+      <text class="btn-text">停止搜索</text>
     </button>
   </view>
 </view>

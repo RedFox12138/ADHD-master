@@ -52,6 +52,16 @@ Page({
 
     // 脑电参数（仅保留 TBR）
     powerRatio: null, // TBR 数值（基准阶段为实时值，治疗阶段为最新值）
+    
+    // 用户标定结果
+    userCalibrated: false,  // 是否已完成标定
+    userType: null,         // 用户类型: 'type_A' or 'type_B'
+    calibrationData: null,  // 完整的标定数据
+    
+    // 模式选择
+    mode: null,             // 'auto': 自动模式, 'manual': 手动模式
+    showModeSelector: false, // 显示模式选择界面
+    manualUserType: null,   // 手动模式下选择的用户类型
 
     // 实验控制
     experimentStarted: false,
@@ -163,6 +173,12 @@ Page({
     // 获取系统信息进行屏幕适配
     this.initSystemInfo();
     
+    // 读取模式选择
+    this.loadModeSelection();
+    
+    // 读取用户标定结果
+    this.loadCalibrationData();
+    
     this.initEmptyChart();
     this.connectWebSocket(); // 初始化WebSocket连接
     this.loadGameImages();    // 加载游戏图片资源
@@ -181,6 +197,149 @@ Page({
           this.stopExperiment();
         }
       }
+    });
+  },
+  
+  // 读取模式选择
+  loadModeSelection: function() {
+    const mode = wx.getStorageSync('gameMode');
+    const manualUserType = wx.getStorageSync('manualUserType');
+    
+    if (mode) {
+      this.setData({
+        mode: mode,
+        manualUserType: manualUserType
+      });
+      console.log(`[模式] 已选择 ${mode === 'auto' ? '自动' : '手动'} 模式`);
+    }
+  },
+  
+  // 显示模式选择界面
+  showModeSelection: function() {
+    this.setData({ showModeSelector: true });
+  },
+  
+  // 选择自动模式
+  selectAutoMode: function() {
+    // 检查是否完成标定
+    if (!this.data.userCalibrated) {
+      wx.showModal({
+        title: '提示',
+        content: '自动模式需要先完成离线实验标定，是否前往标定？',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateTo({
+              url: '/pages/calibration/calibration'
+            });
+          }
+        }
+      });
+      return;
+    }
+    
+    // 保存模式选择
+    wx.setStorageSync('gameMode', 'auto');
+    this.setData({
+      mode: 'auto',
+      showModeSelector: false,
+      userType: this.data.calibrationData.user_type
+    });
+    
+    wx.showToast({ 
+      title: `自动模式 (${this.data.userType})`, 
+      icon: 'success' 
+    });
+  },
+  
+  // 选择手动模式
+  selectManualMode: function(e) {
+    const userType = e.currentTarget.dataset.type;
+    
+    // 保存模式选择
+    wx.setStorageSync('gameMode', 'manual');
+    wx.setStorageSync('manualUserType', userType);
+    
+    this.setData({
+      mode: 'manual',
+      manualUserType: userType,
+      userType: userType,
+      showModeSelector: false
+    });
+    
+    const typeDesc = userType === 'type_A' ? '高活跃型' : '低活跃型';
+    wx.showToast({ 
+      title: `手动模式 (${typeDesc})`, 
+      icon: 'success' 
+    });
+  },
+  
+  // 读取用户标定数据
+  loadCalibrationData: function() {
+    // 先从本地加载
+    const calibrationData = wx.getStorageSync('calibrationData');
+    if (calibrationData && calibrationData.userType) {
+      this.setData({
+        userCalibrated: true,
+        userType: calibrationData.userType,
+        calibrationData: calibrationData
+      });
+      console.log('用户标定数据已加载（本地）:', calibrationData);
+    } else {
+      console.log('本地无标定数据');
+    }
+    
+    // 从后端获取最新数据
+    this.fetchCalibrationDataFromServer();
+  },
+  
+  /**
+   * 从后端获取用户标定数据
+   */
+  fetchCalibrationDataFromServer: function() {
+    const app = getApp();
+    app.getUserId().then(userID => {
+      console.log('[标定数据] 从后端获取用户标定数据, userID:', userID);
+    
+      wx.request({
+        url: 'https://xxyeeg.zicp.fun/get_calibration_status',
+        method: 'GET',
+        data: { user_id: userID },
+        success: (res) => {
+          console.log('[标定数据] 后端返回:', res.data);
+        
+          if (res.data.success && res.data.calibration_result) {
+            const result = res.data.calibration_result;
+            const calibrationData = {
+              userType: result.user_type,
+              user_type: result.user_type,
+              completedTrials: res.data.completed_trials || 0,
+              restingMean: result.resting_mean,
+              attentionMean: result.attention_mean,
+              description: result.description
+            };
+          
+            // 保存到本地
+            wx.setStorageSync('calibrationData', calibrationData);
+          
+            // 更新页面数据
+            this.setData({
+              userCalibrated: true,
+              userType: calibrationData.userType,
+              calibrationData: calibrationData
+            });
+          
+            console.log('[标定数据] 已从后端更新标定数据:', calibrationData);
+          } else {
+            console.log('[标定数据] 用户还未完成标定');
+          }
+        },
+        fail: (err) => {
+          console.error('[标定数据] 获取失败:', err);
+          // 网络错误时使用本地数据
+        }
+      });
+    }).catch(err => {
+      console.error('[标定数据] 获取userId失败:', err);
     });
   },
   
@@ -584,8 +743,13 @@ Page({
       
       // 注意力监测：检测样本熵持续高于基准值的时间
       if (this.data.baselineValue != null && !this.data.gameOver) {
-        if (tbrSnap > this.data.baselineValue) {
-          // 样本熵高于基准值（注意力不集中）
+        // ========== 根据用户类型调整判断逻辑 ==========
+        // type_A: 静息 > 注意力 => 样本熵高表示注意力集中
+        // type_B: 静息 < 注意力 => 样本熵低表示注意力集中（默认）
+        const isAttentionFocused = this.isUserAttentionFocused(tbrSnap);
+        
+        if (!isAttentionFocused) {
+          // 注意力不集中
           // 重置注意力高的计时
           if (this.data.attentionHighStartTime !== null) {
             this.data.attentionHighStartTime = null;
@@ -615,27 +779,26 @@ Page({
               }, 3000);
             }
             
-            // 每12秒损坏一个炮台并升高基准值（12秒、24秒、36秒...）
+            // 每12秒损坏一个炮台并调整基准值（12秒、24秒、36秒...）
             const currentDamageCycle = Math.floor(duration / 12);
             if (currentDamageCycle > this.data.lastDamageTime && duration >= 12) {
               this.data.lastDamageTime = currentDamageCycle;
               this.damageTurret();
               
-              // 同时升高基准值（乘以1.10，让用户更容易达到）
-              const newBaseline = Math.round(this.data.baselineValue * 1.10 * 100) / 100;
-              this.setData({ baselineValue: newBaseline });
+              // 调整基准值
+              const newBaseline = this.adjustBaselineForLowAttention();
               
               wx.showToast({
-                title: `基准值调高至 ${newBaseline}`,
+                title: `基准值调整至 ${newBaseline}`,
                 icon: 'none',
                 duration: 2000
               });
               
-              console.log(`[基准值调整] 注意力低下12s，基准值升高：${this.data.baselineValue} → ${newBaseline}`);
+              console.log(`[基准值调整] 注意力低下12s，基准值调整：${this.data.baselineValue} → ${newBaseline}`);
             }
           }
         } else {
-          // 样本熵低于基准值（注意力集中）
+          // 注意力集中
           // 重置注意力低的计时
           if (this.data.attentionLowStartTime !== null) {
             this.repairAllTurrets();
@@ -654,19 +817,18 @@ Page({
             // 计算已持续的秒数
             const duration = Math.floor((Date.now() - this.data.attentionHighStartTime) / 1000);
             
-            // 每12秒降低基准值并给予奖励大招（12秒、24秒、36秒...）
+            // 每12秒调整基准值并给予奖励大招（12秒、24秒、36秒...）
             const currentRewardCycle = Math.floor(duration / 12);
             if (currentRewardCycle > this.data.lastRewardTime && duration >= 12) {
               this.data.lastRewardTime = currentRewardCycle;
               
-              // 降低基准值（乘以0.95，让用户更难达到）
-              const newBaseline = Math.round(this.data.baselineValue * 0.95 * 100) / 100;
-              this.setData({ baselineValue: newBaseline });
+              // 调整基准值
+              const newBaseline = this.adjustBaselineForHighAttention();
               
               // 触发奖励大招
               this.activateUltimateSkill();
               
-              console.log(`[基准值调整] 注意力集中12s，基准值降低：${this.data.baselineValue} → ${newBaseline}`);
+              console.log(`[基准值调整] 注意力集中12s，基准值调整：${this.data.baselineValue} → ${newBaseline}`);
             }
           }
         }
@@ -674,9 +836,10 @@ Page({
       
       // 每次收到推送时，立即判断是否增加经验值
       // 游戏结束后不再增加经验值
-      // 逻辑：当样本熵低于基准值时增加经验（样本熵越低表示注意力越集中）
+      // 逻辑：当注意力集中时增加经验
       if (!this.data.gameOver && this.data.baselineValue != null) {
-        if (tbrSnap < this.data.baselineValue) {
+        const isAttentionFocused = this.isUserAttentionFocused(tbrSnap);
+        if (isAttentionFocused) {
           this.gainExperience(GAME_CONFIG.experience.gainRate);
         }
       }
@@ -874,6 +1037,35 @@ Page({
         title: '无法开始',
         content: 'WebSocket未连接，无法开始游戏\n请等待连接成功或检查网络',
         showCancel: false
+      });
+      return;
+    }
+    
+    // 检查是否已选择模式
+    if (!this.data.mode) {
+      wx.showModal({
+        title: '请选择模式',
+        content: '请先选择自动模式或手动模式',
+        showCancel: false,
+        success: () => {
+          this.setData({ showModeSelector: true });
+        }
+      });
+      return;
+    }
+    
+    // 如果是自动模式，检查是否完成标定
+    if (this.data.mode === 'auto' && !this.data.userCalibrated) {
+      wx.showModal({
+        title: '未完成标定',
+        content: '自动模式需要先完成离线实验标定，是否前往标定？',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateTo({
+              url: '/pages/calibration/calibration'
+            });
+          }
+        }
       });
       return;
     }
@@ -1891,6 +2083,10 @@ Page({
     wx.navigateTo({ url: '/pages/scan/scan' });
   },
   
+  navigateToCalibration: function() {
+    wx.navigateTo({ url: '/pages/calibration/calibration' });
+  },
+  
   navigateToHistory: function() {
     audioManager.playSound('button_click');
     wx.navigateTo({ url: '/pages/history/history' });
@@ -1911,6 +2107,59 @@ Page({
     this.setData({
       showDataPanel: !this.data.showDataPanel
     });
+  },
+  
+  // 根据用户类型判断是否注意力集中
+  isUserAttentionFocused: function(currentValue) {
+    const baselineValue = this.data.baselineValue;
+    const userType = this.data.userType;
+    
+    if (!userType) {
+      // 未标定的用户，使用默认逻辑（type_B）
+      return currentValue < baselineValue;
+    }
+    
+    if (userType === 'type_A') {
+      // type_A: 静息 > 注意力，所以样本熵高表示注意力集中
+      return currentValue > baselineValue;
+    } else {
+      // type_B: 静息 < 注意力，所以样本熵低表示注意力集中
+      return currentValue < baselineValue;
+    }
+  },
+  
+  // 注意力低下时调整基准值
+  adjustBaselineForLowAttention: function() {
+    const userType = this.data.userType;
+    let newBaseline;
+    
+    if (userType === 'type_A') {
+      // type_A用户，样本熵高表示集中，低下时降低基准值
+      newBaseline = Math.round(this.data.baselineValue * 0.90 * 100) / 100;
+    } else {
+      // type_B用户或未标定，样本熵低表示集中，低下时升高基准值
+      newBaseline = Math.round(this.data.baselineValue * 1.10 * 100) / 100;
+    }
+    
+    this.setData({ baselineValue: newBaseline });
+    return newBaseline;
+  },
+  
+  // 注意力集中时调整基准值
+  adjustBaselineForHighAttention: function() {
+    const userType = this.data.userType;
+    let newBaseline;
+    
+    if (userType === 'type_A') {
+      // type_A用户，样本熵高表示集中，集中时升高基准值（更难达到）
+      newBaseline = Math.round(this.data.baselineValue * 1.05 * 100) / 100;
+    } else {
+      // type_B用户或未标定，样本熵低表示集中，集中时降低基准值（更难达到）
+      newBaseline = Math.round(this.data.baselineValue * 0.95 * 100) / 100;
+    }
+    
+    this.setData({ baselineValue: newBaseline });
+    return newBaseline;
   },
   
   // 计算注意力进度条（反向：样本熵越小，进度越高）

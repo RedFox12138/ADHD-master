@@ -1,0 +1,155 @@
+<!--离线实验校准页面-->
+<view class="container">
+  <!-- 顶部状态栏 -->
+  <view class="status-bar" style="padding-top: {{statusBarHeight}}rpx;">
+    <view class="status-info">
+      <text class="device-status {{connected ? 'connected' : 'disconnected'}}">●</text>
+      <text class="device-name">{{connected ? deviceName : '未连接'}}</text>
+    </view>
+    <view class="experiment-info">
+      <text class="phase-text">实验 {{completedTrials}}/{{requiredTrials}}</text>
+    </view>
+  </view>
+
+  <!-- 主界面区域 -->
+  <view class="main-content">
+    <!-- 离线实验说明 -->
+    <view class="instruction-panel" wx:if="{{!experimentStarted}}">
+      <view class="title">离线实验校准</view>
+      <view class="description">
+        <text class="highlight">个性化注意力训练</text>
+        <text class="mt">通过离线实验，系统将识别您的个体特征，从而提供更精准的注意力训练。</text>
+      </view>
+      
+      <view class="experiment-flow">
+        <view class="flow-title">实验流程（单次）：</view>
+        <view class="flow-item">
+          <view class="flow-icon prepare"></view>
+          <view class="flow-info">
+            <text class="flow-name">准备阶段</text>
+            <text class="flow-time">10秒</text>
+          </view>
+        </view>
+        <view class="flow-item">
+          <view class="flow-icon rest"></view>
+          <view class="flow-info">
+            <text class="flow-name">静息阶段</text>
+            <text class="flow-time">30秒</text>
+            <text class="flow-desc">黑屏+绿色十字，保持放松</text>
+          </view>
+        </view>
+        <view class="flow-item">
+          <view class="flow-icon break"></view>
+          <view class="flow-info">
+            <text class="flow-name">休息阶段</text>
+            <text class="flow-time">10秒</text>
+          </view>
+        </view>
+        <view class="flow-item">
+          <view class="flow-icon attention"></view>
+          <view class="flow-info">
+            <text class="flow-name">注意力阶段</text>
+            <text class="flow-time">30秒</text>
+            <text class="flow-desc">躲避游戏，集中注意力</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="requirement">
+        <text class="requirement-title">实验要求：</text>
+        <text>• 需完成至少 2 次完整实验</text>
+        <text>• 可分多次进行，无需连续完成</text>
+        <text>• 已完成次数：{{completedTrials}}</text>
+      </view>
+
+      <button class="start-btn" bindtap="startCalibration" disabled="{{!connected}}">
+        <text class="btn-icon">🚀</text>
+        <text class="btn-text">{{connected ? '开始离线实验标定' : '请先连接设备'}}</text>
+      </button>
+    </view>
+
+    <!-- 实验进行中界面 -->
+    <view class="experiment-view" wx:if="{{experimentStarted}}">
+      <!-- 准备阶段 -->
+      <view class="phase-container" wx:if="{{currentPhase === 'prepare'}}">
+        <view class="phase-title">准备阶段</view>
+        <view class="countdown">{{remainingTime}}</view>
+        <text class="phase-instruction">请放松，实验即将开始...</text>
+      </view>
+
+      <!-- 静息阶段 -->
+      <view class="phase-container rest-phase" wx:if="{{currentPhase === 'rest'}}">
+        <view class="rest-screen">
+          <view class="green-cross">
+            <view class="cross-horizontal"></view>
+            <view class="cross-vertical"></view>
+          </view>
+          <view class="phase-timer-rest">{{remainingTime}}s</view>
+        </view>
+        <text class="phase-tip-rest">请注视绿色十字，保持放松，减少眨眼</text>
+      </view>
+
+      <!-- 休息阶段 -->
+      <view class="phase-container" wx:if="{{currentPhase === 'break'}}">
+        <view class="phase-title">休息时间</view>
+        <view class="countdown">{{remainingTime}}</view>
+        <text class="phase-instruction">准备进入注意力任务...</text>
+        <text class="attention-warning">请尽量减少身体动作，避免肌电干扰</text>
+      </view>
+
+      <!-- 注意力阶段（躲避游戏） -->
+      <view class="phase-container dodge-game" wx:if="{{currentPhase === 'attention'}}">
+        <view class="game-stats-top">
+          <text class="attention-timer">剩余时间: {{remainingTime}}s</text>
+        </view>
+        
+        <view class="game-area">
+          <!-- 玩家 -->
+          <view class="player" style="left: {{playerX}}rpx;"></view>
+          
+          <!-- 障碍物 -->
+          <view class="obstacle" 
+                wx:for="{{obstacles}}" 
+                wx:key="id"
+                style="left: {{item.x}}rpx; top: {{item.y}}rpx;"></view>
+        </view>
+        
+        <view class="game-controls">
+          <button class="control-btn left" bindtouchstart="onLeftDown" bindtouchend="onLeftUp">←</button>
+          <button class="control-btn right" bindtouchstart="onRightDown" bindtouchend="onRightUp">→</button>
+        </view>
+      </view>
+
+      <!-- 实验完成 -->
+      <view class="phase-container" wx:if="{{currentPhase === 'complete'}}">
+        <view class="complete-icon">✓</view>
+        <view class="phase-title">本次实验完成！</view>
+        <view class="trial-stats">
+          <text>已完成: {{completedTrials}}/{{requiredTrials}}</text>
+          <text wx:if="{{completedTrials < requiredTrials}}">还需: {{requiredTrials - completedTrials}} 次</text>
+        </view>
+        
+        <view class="action-buttons">
+          <button class="action-btn secondary" bindtap="backToHome">
+            <text class="btn-icon">🏠</text>
+            <text class="btn-text">返回主页</text>
+          </button>
+          <button class="action-btn primary" bindtap="continueExperiment" wx:if="{{completedTrials < requiredTrials}}">
+            <text class="btn-icon">🔄</text>
+            <text class="btn-text">继续实验</text>
+          </button>
+          <button class="action-btn primary" bindtap="viewResults" wx:else>
+            <text class="btn-icon">📊</text>
+            <text class="btn-text">查看结果</text>
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 数据收集提示 -->
+  <view class="data-indicator" wx:if="{{experimentStarted && isCollectingData}}">
+    <view class="indicator-dot"></view>
+    <text>数据采集中</text>
+  </view>
+</view>

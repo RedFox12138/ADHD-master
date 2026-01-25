@@ -73,7 +73,7 @@ addpath(fullfile(fileparts(mfilename('fullpath')), 'feature'));
 %                  'WPE_IA_Product', 'WPE_IA_Weighted', 'WPE_IA_Ratio', 'WPE_IA_Composite', ...  % 组合特征
 %                  'Complexity_Activity', 'Complexity_Mobility', 'Complexity_Complexity'};  % Hjorth参数
 
-feature_names = {'SampEn','XSampEn','MvSampEn','MSEn_CI', 'MvMSE', 'cMSEn', 'cXMSE', 'cMvMSE','TBR'};
+feature_names = {'SampEn','FuzzEn','XSampEn','PermEn','LZC','HFD','TBR'};
 n_features = length(feature_names);
 
 % 初始化多子目录存储结构: subfolder_features{子目录索引}.特征名.{rest/attention}

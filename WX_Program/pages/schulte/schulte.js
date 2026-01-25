@@ -67,37 +67,41 @@ Page({
 
   // 加载历史记录
   loadRecords: function() {
-    const userId = app.globalData.userId || 'user001';
-    const difficulty = this.data.selectedDifficulty;
-    
-    wx.request({
-      url: `${HTTP_URL}/getSchulteRecords`,
-      method: 'GET',
-      data: {
-        userId: userId,
-        difficulty: difficulty
-      },
-      success: (res) => {
-        if (res.data.success) {
-          const records = res.data.records || [];
-          const stats = res.data.stats || {};
+    const app = getApp();
+    app.getUserId().then(userId => {
+      const difficulty = this.data.selectedDifficulty;
+      
+      wx.request({
+        url: `${HTTP_URL}/getSchulteRecords`,
+        method: 'GET',
+        data: {
+          userId: userId,
+          difficulty: difficulty
+        },
+        success: (res) => {
+          if (res.data.success) {
+            const records = res.data.records || [];
+            const stats = res.data.stats || {};
           
-          this.setData({
-            records: records.slice(0, 20), // 显示最近20条用于绘图
-            bestTime: stats.bestTime || 0,
-            avgTime: Math.round(stats.avgTime * 10) / 10 || 0, // 保留一位小数并转为数字
-            totalGames: stats.totalGames || 0
-          }, () => {
-            // 数据加载后渲染图表
-            if (records.length > 0) {
-              this.renderChart();
-            }
-          });
+            this.setData({
+              records: records.slice(0, 20), // 显示最近20条用于绘图
+              bestTime: stats.bestTime || 0,
+              avgTime: Math.round(stats.avgTime * 10) / 10 || 0, // 保留一位小数并转为数字
+              totalGames: stats.totalGames || 0
+            }, () => {
+              // 数据加载后渲染图表
+              if (records.length > 0) {
+                this.renderChart();
+              }
+            });
+          }
+        },
+        fail: (err) => {
+          console.error('[加载记录失败]', err);
         }
-      },
-      fail: (err) => {
-        console.error('[加载记录失败]', err);
-      }
+      });
+    }).catch(err => {
+      console.error('[获取userId失败]', err);
     });
   },
 
@@ -240,31 +244,35 @@ Page({
     }
     
     const elapsedTime = this.data.elapsedTime;
-    const userId = app.globalData.userId || 'user001';
+    const app = getApp();
     const difficulty = this.data.selectedDifficulty;
     
     // 检查是否是新记录
     const isNewRecord = this.data.bestTime === 0 || elapsedTime < this.data.bestTime;
     
     // 保存记录到后端
-    wx.request({
-      url: `${HTTP_URL}/saveSchulteRecord`,
-      method: 'POST',
-      data: {
-        userId: userId,
-        difficulty: difficulty,
-        time: elapsedTime
-      },
-      success: (res) => {
-        if (res.data.success) {
-          console.log('[保存记录成功]');
-          // 重新加载记录
-          this.loadRecords();
+    app.getUserId().then(userId => {
+      wx.request({
+        url: `${HTTP_URL}/saveSchulteRecord`,
+        method: 'POST',
+        data: {
+          userId: userId,
+          difficulty: difficulty,
+          time: elapsedTime
+        },
+        success: (res) => {
+          if (res.data.success) {
+            console.log('[保存记录成功]');
+            // 重新加载记录
+            this.loadRecords();
+          }
+        },
+        fail: (err) => {
+          console.error('[保存记录失败]', err);
         }
-      },
-      fail: (err) => {
-        console.error('[保存记录失败]', err);
-      }
+      });
+    }).catch(err => {
+      console.error('[获取userId失败]', err);
     });
     
     // 显示完成弹窗

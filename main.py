@@ -16,6 +16,9 @@ import datetime
 import requests
 from scipy.signal import spectrogram
 from PreProcess import preprocess3,compute_power_ratio
+from feature_calculator import calculate_features, calculate_realtime_feature
+# from openai import OpenAI
+from simple_websocket import ConnectionClosed
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'adhd_eeg_secret_2024'
@@ -24,6 +27,15 @@ sock = Sock(app)
 APPID = 'wx5a83526f8eca0449'
 SECRET = '907a464400ff1dcf21c297019e543582'
 fs = 250
+
+
+# 初始化阿里云百炼大模型客户端，优先用环境变量 DASHSCOPE_API_KEY
+# import os
+# ai_client = OpenAI(
+#     api_key=os.getenv("DASHSCOPE_API_KEY", "sk-341c8f4ad671494c84d12201dc2737cf"),
+#     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+# )
+
 user_sessions = {}
 session_lock = threading.Lock()
 processed_raw_buffer = collections.deque(maxlen=1500)
@@ -32,13 +44,158 @@ hex_buffers = {}  # 每个用户的16进制字符串缓冲区
 user_websockets = {}  # 用户ID到WebSocket连接的映射 {user_id: ws}
 
 
+def process_calibration_data(user_id, trials):
+    """
+    处理离线实验标定数据，判断用户类型
+    
+    参数:
+        user_id: 用户ID
+        trials: 实验数据列表，每个trial包含restingData和attentionData
+    
+    返回:
+        {
+            'success': bool,
+            'user_type': 'type_A' or 'type_B',
+            'resting_mean': float,
+            'attention_mean': float,
+            'description': str
+        }
+    """
+    try:
+        print(f'[标定] 开始处理用户 {user_id} 的标定数据，共 {len(trials)} 次实验')
+        
+        # 收集所有静息和注意力阶段的特征值
+        all_resting_features = []
+        all_attention_features = []
+        
+        for i, trial in enumerate(trials):
+            print(f'[标定] 处理第 {i+1} 次实验')
+            
+            resting_data = trial.get('restingData', [[]])[0]  # 获取第一个元素（数据列表）
+            attention_data = trial.get('attentionData', [[]])[0]
+            
+            # 计算静息阶段的特征（这里使用样本熵作为示例）
+            if len(resting_data) > 0:
+                # 假设数据是原始EEG值，需要先预处理
+                # 这里简化处理，实际应该调用你的预处理函数
+                try:
+                    # 计算样本熵（可以根据实际情况调整参数）
+                    resting_sampen = calculate_sampen_from_raw(resting_data)
+                    all_resting_features.append(resting_sampen)
+                    print(f'[标定] 实验{i+1} 静息样本熵: {resting_sampen:.4f}')
+                except Exception as e:
+                    print(f'[标定] 实验{i+1} 静息数据处理失败: {e}')
+            
+            # 计算注意力阶段的特征
+            if len(attention_data) > 0:
+                try:
+                    attention_sampen = calculate_sampen_from_raw(attention_data)
+                    all_attention_features.append(attention_sampen)
+                    print(f'[标定] 实验{i+1} 注意力样本熵: {attention_sampen:.4f}')
+                except Exception as e:
+                    print(f'[标定] 实验{i+1} 注意力数据处理失败: {e}')
+        
+        # 检查是否有足够的数据
+        if len(all_resting_features) < 2 or len(all_attention_features) < 2:
+            return {
+                'success': False,
+                'message': f'数据不足，需要至少2次有效实验。当前静息: {len(all_resting_features)}, 注意力: {len(all_attention_features)}'
+            }
+        
+        # 计算均值
+        resting_mean = np.mean(all_resting_features)
+        attention_mean = np.mean(all_attention_features)
+        
+        print(f'[标定] 静息均值: {resting_mean:.4f}, 注意力均值: {attention_mean:.4f}')
+        
+        # 判断用户类型
+        if resting_mean > attention_mean:
+            user_type = 'type_A'
+            description = '静息时样本熵 > 注意力时样本熵'
+        else:
+            user_type = 'type_B'
+            description = '静息时样本熵 < 注意力时样本熵'
+        
+        print(f'[标定] 用户类型: {user_type} ({description})')
+        
+        return {
+            'success': True,
+            'user_type': user_type,
+            'resting_mean': float(resting_mean),
+            'attention_mean': float(attention_mean),
+            'description': description,
+            'resting_features': [float(f) for f in all_resting_features],
+            'attention_features': [float(f) for f in all_attention_features]
+        }
+        
+    except Exception as e:
+        print(f'[标定] 处理失败: {e}')
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'message': str(e)
+        }
+
+
+def calculate_sampen_from_raw(raw_data):
+    """
+    从原始数据计算特征（使用全局特征计算模块）
+    
+    参数:
+        raw_data: 原始EEG数据列表（16进制字符串或数值）
+    
+    返回:
+        特征值
+    """
+    # 如果数据是16进制字符串列表，需要先转换
+    if isinstance(raw_data[0], str):
+        # 转换16进制字符串为整数
+        eeg_values = []
+        for hex_str in raw_data:
+            try:
+                # 假设每10个字符是一个数据包
+                for i in range(0, len(hex_str), 10):
+                    packet = hex_str[i:i+10]
+                    if len(packet) == 10:
+                        # 提取EEG值（根据你的数据格式调整）
+                        eeg_hex = packet[0:6]
+                        value = int(eeg_hex, 16)
+                        # 转换为有符号数
+                        if value > 0x7FFFFF:
+                            value -= 0x1000000
+                        eeg_values.append(value)
+            except Exception as e:
+                continue
+    else:
+        eeg_values = raw_data
+    
+    # 预处理：去除基线漂移等
+    if len(eeg_values) > 100:
+        eeg_array = np.array(eeg_values, dtype=float)
+        
+        # 简单的去均值处理
+        eeg_array = eeg_array - np.mean(eeg_array)
+        
+        # 使用统一的特征计算接口
+        try:
+            feature_value = calculate_features(eeg_array, fs=250)
+            return feature_value
+        except Exception as e:
+            print(f'[特征计算] 计算失败: {e}')
+            # 降级使用简单统计特征
+            return np.std(eeg_array)
+    else:
+        return 0.0
+
+
 def get_user_session(user_id):
     current_time = datetime.datetime.now()
     date_str = current_time.strftime("%Y%m%d")  # 按日期组织数据
 
-    # 创建按日期组织的目录结构
-    user_dir = os.path.join('data', user_id, 'data', date_str)
-    result_dir = os.path.join('data', user_id, 'result', date_str)
+    # 创建按日期组织的目录结构 - 统一使用 eeg_data 和 eeg_results
+    user_dir = os.path.join('data', user_id, 'eeg_data', date_str)
+    result_dir = os.path.join('data', user_id, 'eeg_results', date_str)
 
     with session_lock:
         os.makedirs(user_dir, exist_ok=True)
@@ -114,7 +271,6 @@ def decode_hex_data(hex_string, user_id):
     
     返回：
         decoded_data: 解码后的数据点列表
-        remaining_hex: 未处理完的16进制字符串（留给下次处理）
     """
     global hex_buffers
     
@@ -227,9 +383,18 @@ def process_data():
         with session_lock:
             session = user_sessions[user_id]
             is_recording = session.get('recording', False)
+            is_calibration_recording = session.get('calibration_recording', False)
+            calibration_raw_file = session.get('calibration_raw_file')
         
         if is_recording:
             with open(raw_file, 'a') as f:
+                for p in points:
+                    f.write(f"{p}\n")
+                f.flush()
+        
+        # 离线实验期间同时写入离线实验文件（与塔防游戏一样，写入转换后的数据）
+        if is_calibration_recording and calibration_raw_file:
+            with open(calibration_raw_file, 'a') as f:
                 for p in points:
                     f.write(f"{p}\n")
                 f.flush()
@@ -408,8 +573,8 @@ def websocket(ws):
                                     date_str = current_time.strftime("%Y%m%d")
                                     timestamp = current_time.strftime("%H%M%S_%f")[:-3]
                                     
-                                    user_dir = os.path.join('data', user_id, 'data', date_str)
-                                    result_dir = os.path.join('data', user_id, 'result', date_str)
+                                    user_dir = os.path.join('data', user_id, 'eeg_data', date_str)
+                                    result_dir = os.path.join('data', user_id, 'eeg_results', date_str)
                                     os.makedirs(user_dir, exist_ok=True)
                                     os.makedirs(result_dir, exist_ok=True)
                                     
@@ -449,6 +614,79 @@ def websocket(ws):
                                 }))
                             else:
                                 print(f'[WebSocket] ⚠️ 用户 {user_id} 没有活跃session')
+                
+                elif event == 'start_calibration_recording':
+                    # 开始离线实验数据记录（学习塔防游戏的方式）
+                    user_id = data.get('userId')
+                    trial_number = data.get('trialNumber', 1)
+                    if user_id:
+                        with session_lock:
+                            if user_id in user_sessions:
+                                session = user_sessions[user_id]
+                                current_time = datetime.datetime.now()
+                                timestamp = current_time.strftime("%Y%m%d_%H%M%S")
+                                
+                                # 创建离线实验目录
+                                calibration_dir = os.path.join('data', user_id, 'calibration', f'trial_{trial_number}')
+                                os.makedirs(calibration_dir, exist_ok=True)
+                                
+                                session['calibration_raw_file'] = os.path.join(calibration_dir, f"raw_{timestamp}.txt")
+                                session['calibration_trial'] = trial_number
+                                session['calibration_recording'] = True
+                                
+                                print(f'[WebSocket] 🔴 离线实验{trial_number} 开始记录 -> {session["calibration_raw_file"]}')
+                                ws.send(json.dumps({
+                                    'event': 'calibration_recording_started',
+                                    'message': f'离线实验{trial_number}开始记录',
+                                    'userId': user_id
+                                }))
+                
+                elif event == 'stop_calibration_recording':
+                    # 停止离线实验数据记录并触发处理
+                    user_id = data.get('userId')
+                    trial_number = data.get('trialNumber', 1)
+                    if user_id:
+                        with session_lock:
+                            if user_id in user_sessions:
+                                session = user_sessions[user_id]
+                                session['calibration_recording'] = False
+                                raw_file = session.get('calibration_raw_file')
+                                
+                                print(f'[WebSocket] ⏹️ 离线实验{trial_number} 停止记录')
+                                
+                                # 异步处理数据
+                                def process_async():
+                                    from calibration_processor import process_calibration_trial, analyze_all_trials
+                                    
+                                    if raw_file and os.path.exists(raw_file):
+                                        result = process_calibration_trial(raw_file, user_id, trial_number, fs=250)
+                                        
+                                        if result['success']:
+                                            print(f'[离线实验] ✅ 第{trial_number}次实验处理完成')
+                                            
+                                            # 检查是否所有实验都完成
+                                            features_files = [
+                                                os.path.join('data', user_id, 'calibration', f'trial_{i}_features.json')
+                                                for i in range(1, 3)
+                                            ]
+                                            
+                                            if all(os.path.exists(f) for f in features_files):
+                                                print(f'[离线实验] 🎯 所有实验完成，开始最终分析...')
+                                                final_result = analyze_all_trials(user_id, num_trials=2)
+                                                
+                                                if final_result['success']:
+                                                    result_file = os.path.join('data', user_id, 'calibration', 'calibration_result.json')
+                                                    with open(result_file, 'w', encoding='utf-8') as f:
+                                                        json.dump(final_result, f, ensure_ascii=False, indent=2)
+                                                    print(f'[离线实验] ✅ 用户{user_id}标定完成: {final_result["user_type"]}')
+                                
+                                threading.Thread(target=process_async).start()
+                                
+                                ws.send(json.dumps({
+                                    'event': 'calibration_recording_stopped',
+                                    'message': f'离线实验{trial_number}停止记录，开始处理',
+                                    'userId': user_id
+                                }))
                     
                 elif event == 'unregister_user':
                     # 用户注销
@@ -460,6 +698,48 @@ def websocket(ws):
                             'event': 'unregistered',
                             'message': f'用户 {user_id} 已注销'
                         }))
+                
+                elif event == 'submit_calibration':
+                    # 接收离线实验标定数据并进行分类
+                    print('[WebSocket] 🎯 收到离线实验标定数据')
+                    user_id = data.get('user_id')
+                    trials = data.get('trials', [])
+                    
+                    if not user_id or not trials:
+                        ws.send(json.dumps({
+                            'type': 'error',
+                            'message': '缺少必要参数'
+                        }))
+                    else:
+                        # 调用标定数据处理函数
+                        result = process_calibration_data(user_id, trials)
+                        
+                        if result['success']:
+                            # 保存标定结果
+                            calibration_dir = os.path.join('data', user_id, 'calibration')
+                            os.makedirs(calibration_dir, exist_ok=True)
+                            
+                            result_file = os.path.join(calibration_dir, 'calibration_result.json')
+                            with open(result_file, 'w', encoding='utf-8') as f:
+                                json.dump(result, f, ensure_ascii=False, indent=2)
+                            
+                            print(f'[WebSocket] ✅ 用户 {user_id} 标定完成: {result["user_type"]}')
+                            
+                            # 发送结果到小程序
+                            ws.send(json.dumps({
+                                'type': 'calibration_result',
+                                'data': {
+                                    'user_type': result['user_type'],
+                                    'resting_mean': result['resting_mean'],
+                                    'attention_mean': result['attention_mean'],
+                                    'description': result.get('description', '')
+                                }
+                            }))
+                        else:
+                            ws.send(json.dumps({
+                                'type': 'error',
+                                'message': result.get('message', '标定数据处理失败')
+                            }))
                 
             except json.JSONDecodeError as e:
                 print(f'[WebSocket] ❌ 消息格式错误: {e}')
@@ -480,6 +760,184 @@ def websocket(ws):
             print('[WebSocket] 🔌 连接断开（未注册用户）')
 
 # ========================================
+
+@app.route('/upload_calibration_data', methods=['POST'])
+def upload_calibration_data():
+    """
+    接收离线实验数据并处理
+    """
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        trial_number = data.get('trial_number', 1)
+        eeg_data = data.get('eeg_data', [])  # 80秒的EEG数据数组
+        
+        if not user_id or not eeg_data:
+            return jsonify({'success': False, 'message': '缺少必要参数'}), 400
+        
+        print(f'[离线实验] 收到用户 {user_id} 第 {trial_number} 次实验数据，共 {len(eeg_data)} 个点')
+        
+        # 创建目录
+        calibration_dir = os.path.join('data', user_id, 'calibration', f'trial_{trial_number}')
+        os.makedirs(calibration_dir, exist_ok=True)
+        
+        # 保存原始数据
+        current_time = datetime.datetime.now()
+        timestamp = current_time.strftime("%Y%m%d_%H%M%S")
+        raw_file = os.path.join(calibration_dir, f'raw_{timestamp}.txt')
+        
+        with open(raw_file, 'w') as f:
+            for value in eeg_data:
+                f.write(f'{value}\n')
+        
+        print(f'[离线实验] 数据已保存到: {raw_file}')
+        
+        # 启动后台处理
+        def process_async():
+            from calibration_processor import process_calibration_trial, analyze_all_trials
+            
+            # 处理单次实验
+            result = process_calibration_trial(raw_file, user_id, trial_number, fs=250)
+            
+            if result['success']:
+                print(f'[离线实验] ✅ 第 {trial_number} 次实验处理完成')
+                print(f'[离线实验] 📁 数据保存位置: data/{user_id}/calibration/')
+                
+                # 检查是否所有实验都完成（假设需要2次）
+                features_files = [
+                    os.path.join('data', user_id, 'calibration', f'trial_{i}_features.json')
+                    for i in range(1, 3)
+                ]
+                
+                if all(os.path.exists(f) for f in features_files):
+                    print(f'[离线实验] 🎯 所有实验完成，开始最终分析...')
+                    
+                    # 分析所有实验
+                    final_result = analyze_all_trials(user_id, num_trials=2)
+                    
+                    if final_result['success']:
+                        result_file = os.path.join('data', user_id, 'calibration', 'calibration_result.json')
+                        with open(result_file, 'w', encoding='utf-8') as f:
+                            json.dump(final_result, f, ensure_ascii=False, indent=2)
+                        
+                        print(f'[离线实验] ✅ 用户 {user_id} 标定完成: {final_result["user_type"]}')
+                        print(f'[离线实验] 📊 分析结果已保存: {result_file}')
+                        
+                        # 保存详细的分析报告
+                        report_file = os.path.join('data', user_id, 'calibration', 'analysis_report.txt')
+                        with open(report_file, 'w', encoding='utf-8') as f:
+                            f.write(f"用户标定分析报告\n")
+                            f.write(f"=" * 50 + "\n")
+                            f.write(f"用户ID: {user_id}\n")
+                            f.write(f"实验次数: {num_trials}\n")
+                            f.write(f"分类结果: {final_result['user_type']}\n")
+                            f.write(f"描述: {final_result['description']}\n")
+                            f.write(f"\n详细数据:\n")
+                            f.write(f"静息阶段均值: {final_result['resting_mean']:.4f}\n")
+                            f.write(f"注意力阶段均值: {final_result['attention_mean']:.4f}\n")
+                            f.write(f"\n各次实验数据:\n")
+                            for i, (r, a) in enumerate(zip(final_result.get('all_resting_means', []), 
+                                                          final_result.get('all_attention_means', [])), 1):
+                                f.write(f"  实验{i}: 静息={r:.4f}, 注意力={a:.4f}\n")
+                        print(f'[离线实验] 📄 分析报告已保存: {report_file}')
+            else:
+                print(f'[离线实验] ❌ 处理失败: {result.get("message")}')
+        
+        # 在后台线程处理（不阻塞响应）
+        threading.Thread(target=process_async).start()
+        
+        # 立即返回响应
+        return jsonify({
+            'success': True,
+            'message': f'第 {trial_number} 次实验数据已接收，正在后台处理...',
+            'trial_number': trial_number
+        })
+        
+    except Exception as e:
+        print(f'[离线实验] ❌ 上传失败: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/get_calibration_result', methods=['GET'])
+def get_calibration_result():
+    """
+    查询离线实验的处理结果
+    """
+    user_id = request.args.get('user_id')
+    
+    if not user_id:
+        return jsonify({'success': False, 'message': '缺少user_id参数'}), 400
+    
+    result_file = os.path.join('data', user_id, 'calibration', 'calibration_result.json')
+    
+    if os.path.exists(result_file):
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result = json.load(f)
+        return jsonify(result)
+    else:
+        # 检查已完成的实验数量
+        trial_count = 0
+        for i in range(1, 3):
+            features_file = os.path.join('data', user_id, 'calibration', f'trial_{i}_features.json')
+            if os.path.exists(features_file):
+                trial_count += 1
+        
+        return jsonify({
+            'success': False,
+            'message': '标定未完成',
+            'completed_trials': trial_count,
+            'required_trials': 2
+        })
+
+
+@app.route('/get_calibration_status', methods=['GET'])
+def get_calibration_status():
+    """
+    获取用户标定状态（包括已完成的实验次数和标定结果）
+    用于小程序重新打开时加载用户数据
+    """
+    user_id = request.args.get('user_id')
+    
+    if not user_id:
+        return jsonify({'success': False, 'message': '缺少user_id参数'}), 400
+    
+    print(f'[标定状态] 查询用户 {user_id} 的标定状态')
+    
+    # 检查已完成的实验数量
+    trial_count = 0
+    for i in range(1, 10):  # 最多检查10次实验
+        features_file = os.path.join('data', user_id, 'calibration', f'trial_{i}_features.json')
+        if os.path.exists(features_file):
+            trial_count += 1
+        else:
+            break  # 如果某次不存在，后面的也不存在
+    
+    # 检查是否有最终标定结果
+    result_file = os.path.join('data', user_id, 'calibration', 'calibration_result.json')
+    calibration_result = None
+    
+    if os.path.exists(result_file):
+        try:
+            with open(result_file, 'r', encoding='utf-8') as f:
+                calibration_result = json.load(f)
+            print(f'[标定状态] 用户 {user_id} 已完成标定: {calibration_result.get("user_type")}')
+        except Exception as e:
+            print(f'[标定状态] 读取标定结果失败: {e}')
+    
+    response_data = {
+        'success': True,
+        'user_id': user_id,
+        'completed_trials': trial_count,
+        'required_trials': 2,
+        'calibration_result': calibration_result  # 可能为None
+    }
+    
+    print(f'[标定状态] 返回: 已完成{trial_count}次实验, 标定结果={calibration_result is not None}')
+    
+    return jsonify(response_data)
+
 
 @app.route('/getOpenId', methods=['POST'])
 def get_openid():
@@ -1151,7 +1609,7 @@ def save_schulte_record():
             return jsonify({"success": False, "error": "无效的用时"}), 400
         
         # 舒尔特方格记录目录路径（按用户和难度分类）
-        records_dir = os.path.join('data', user_id, 'schulte_records', difficulty)
+        records_dir = os.path.join('data', user_id, 'schulte', difficulty)
         os.makedirs(records_dir, exist_ok=True)
         
         # 获取当前日期
@@ -1183,7 +1641,7 @@ def get_schulte_records():
         difficulty = request.args.get('difficulty', '5x5')
         
         # 舒尔特方格记录目录路径
-        records_dir = os.path.join('data', user_id, 'schulte_records', difficulty)
+        records_dir = os.path.join('data', user_id, 'schulte', difficulty)
         
         if not os.path.exists(records_dir):
             return jsonify({
@@ -1243,6 +1701,268 @@ def get_schulte_records():
 
     except Exception as e:
         print(f"[获取舒尔特记录错误] {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+def collect_user_training_data(user_id):
+    """
+    收集用户所有训练数据，包括：
+    1. 躲避游戏记录（训练频率、成绩、时间段）
+    2. 舒尔特方格记录（不同难度）
+    3. 离线实验标定数据
+    """
+    training_data = {
+        "game_records": [],
+        "schulte_records": {},
+        "calibration_data": None,
+        "summary": {}
+    }
+    
+    # 1. 收集躲避游戏记录
+    game_records_dir = os.path.join('data', user_id, 'game_records')
+    if os.path.exists(game_records_dir):
+        game_records = []
+        for filename in sorted(os.listdir(game_records_dir)):
+            if filename.endswith('.txt'):
+                record_file = os.path.join(game_records_dir, filename)
+                with open(record_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if ',' in line:
+                            parts = line.split(',')
+                            try:
+                                timestamp = parts[0]
+                                game_time = int(parts[1])
+                                difficulty = parts[2] if len(parts) >= 3 else "normal"
+                                
+                                # 解析时间段
+                                hour = int(timestamp.split()[1].split(':')[0])
+                                time_period = "早晨" if 6 <= hour < 12 else "下午" if 12 <= hour < 18 else "晚上"
+                                
+                                game_records.append({
+                                    "timestamp": timestamp,
+                                    "gameTime": game_time,
+                                    "difficulty": difficulty,
+                                    "hour": hour,
+                                    "timePeriod": time_period
+                                })
+                            except (ValueError, IndexError):
+                                continue
+        training_data["game_records"] = game_records
+    
+    # 2. 收集舒尔特方格记录
+    schulte_base_dir = os.path.join('data', user_id, 'schulte')
+    if os.path.exists(schulte_base_dir):
+        for difficulty in ['5x5', '6x6', '7x7']:
+            difficulty_dir = os.path.join(schulte_base_dir, difficulty)
+            if os.path.exists(difficulty_dir):
+                records = []
+                for filename in os.listdir(difficulty_dir):
+                    if filename.endswith('.txt'):
+                        file_path = os.path.join(difficulty_dir, filename)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                for line in f:
+                                    line = line.strip()
+                                    if line:
+                                        parts = line.split(',')
+                                        if len(parts) >= 2:
+                                            timestamp = parts[0]
+                                            time_value = float(parts[1])
+                                            
+                                            # 解析时间段
+                                            hour = int(timestamp.split()[1].split(':')[0])
+                                            time_period = "早晨" if 6 <= hour < 12 else "下午" if 12 <= hour < 18 else "晚上"
+                                            
+                                            records.append({
+                                                "timestamp": timestamp,
+                                                "time": time_value,
+                                                "hour": hour,
+                                                "timePeriod": time_period
+                                            })
+                        except Exception as e:
+                            continue
+                training_data["schulte_records"][difficulty] = records
+    
+    # 3. 收集离线标定数据（如果存在）
+    calibration_file = os.path.join('data', user_id, 'eeg_data', 'calibration_result.json')
+    if os.path.exists(calibration_file):
+        try:
+            with open(calibration_file, 'r', encoding='utf-8') as f:
+                training_data["calibration_data"] = json.load(f)
+        except:
+            pass
+    
+    # 4. 生成汇总统计
+    summary = {}
+    
+    # 躲避游戏统计
+    if game_records:
+        game_times = [r['gameTime'] for r in game_records]
+        time_periods = {}
+        for r in game_records:
+            period = r['timePeriod']
+            time_periods[period] = time_periods.get(period, []) + [r['gameTime']]
+        
+        summary['game'] = {
+            "total_count": len(game_records),
+            "avg_time": sum(game_times) / len(game_times),
+            "best_time": max(game_times),
+            "worst_time": min(game_times),
+            "by_time_period": {
+                period: {
+                    "count": len(times),
+                    "avg": sum(times) / len(times)
+                } for period, times in time_periods.items()
+            },
+            "recent_7_days": len([r for r in game_records if (datetime.datetime.now() - datetime.datetime.strptime(r['timestamp'], "%Y-%m-%d %H:%M:%S")).days <= 7]),
+            "training_days": len(set(r['timestamp'].split()[0] for r in game_records))
+        }
+    
+    # 舒尔特方格统计
+    schulte_summary = {}
+    for difficulty, records in training_data["schulte_records"].items():
+        if records:
+            times = [r['time'] for r in records]
+            schulte_summary[difficulty] = {
+                "total_count": len(records),
+                "best_time": min(times),
+                "avg_time": sum(times) / len(times),
+                "recent_7_days": len([r for r in records if (datetime.datetime.now() - datetime.datetime.strptime(r['timestamp'], "%Y-%m-%d %H:%M:%S")).days <= 7])
+            }
+    if schulte_summary:
+        summary['schulte'] = schulte_summary
+    
+    training_data["summary"] = summary
+    return training_data
+
+def generate_ai_advice(training_data):
+    """
+    使用阿里云百炼大模型生成训练建议
+    """
+    try:
+        # 构建prompt
+        prompt = f"""你是一个专业的ADHD（注意力缺陷多动障碍）训练指导专家，需要根据用户的训练数据给出针对性的建议。
+
+用户训练数据摘要：
+
+【塔防小游戏训练】
+"""
+        if 'game' in training_data['summary']:
+            game_data = training_data['summary']['game']
+            prompt += f"- 总训练次数：{game_data['total_count']}次\n"
+            prompt += f"- 平均生存时间：{game_data['avg_time']:.1f}秒\n"
+            prompt += f"- 最长生存时间：{game_data['best_time']}秒\n"
+            prompt += f"- 最短生存时间：{game_data['worst_time']}秒\n"
+            prompt += f"- 训练天数：{game_data['training_days']}天\n"
+            prompt += f"- 近7天训练次数：{game_data['recent_7_days']}次\n"
+            
+            if 'by_time_period' in game_data:
+                prompt += "\n不同时段训练表现：\n"
+                for period, stats in game_data['by_time_period'].items():
+                    prompt += f"  • {period}：{stats['count']}次训练，平均生存{stats['avg']:.1f}秒\n"
+        else:
+            prompt += "- 暂无塔防游戏训练记录\n"
+        
+        prompt += "\n【舒尔特方格训练】\n"
+        if 'schulte' in training_data['summary']:
+            for difficulty, stats in training_data['summary']['schulte'].items():
+                prompt += f"- {difficulty}难度：{stats['total_count']}次训练，最佳{stats['best_time']:.1f}秒，平均{stats['avg_time']:.1f}秒\n"
+        else:
+            prompt += "- 暂无舒尔特方格训练记录\n"
+        
+        prompt += """
+
+请基于以上数据，从以下几个维度给出建议：
+1. **训练频率**：评估当前训练频率是否合理，是否需要调整
+2. **训练效果**：分析训练成绩的变化趋势（塔防游戏生存时间是否提升，舒尔特方格完成时间是否缩短）
+3. **训练时段**：根据不同时段的表现，建议最佳训练时间
+4. **训练难度**：是否需要调整难度以获得更好的训练效果
+5. **个性化建议**：结合用户的具体情况，给出3-5条实用的训练建议
+
+请用温暖、鼓励的语气，给出200字左右的综合建议。使用emoji让建议更生动友好。"""
+
+        # 调用大模型
+        try:
+            # 参考GDScript working example，使用requests直接调用API，避免SDK兼容性问题
+            api_key = os.getenv("DASHSCOPE_API_KEY", "sk-341c8f4ad671494c84d12201dc2737cf")
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            payload = {
+                "model": "qwen-flash",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "你是一个专业、温暖的ADHD训练指导专家，擅长分析用户数据并给出个性化建议。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 800
+            }
+            
+            # 增加超时设置
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if "choices" in result and len(result["choices"]) > 0:
+                    advice = result["choices"][0]["message"]["content"]
+                    return advice
+                else:
+                    print(f"[AI建议生成错误] 响应格式异常: {result}")
+            else:
+                print(f"[AI建议生成错误] API返回错误: {response.status_code} - {response.text}")
+                
+            return "暂时无法生成AI建议，请稍后再试。继续保持规律训练，您的坚持一定会有回报！💪"
+            
+        except Exception as e:
+            print(f"[AI建议生成错误] {e}")
+            print("请参考文档：https://help.aliyun.com/zh/model-studio/developer-reference/error-code")
+            return "暂时无法生成AI建议，请稍后再试。继续保持规律训练，您的坚持一定会有回报！💪"
+
+    except Exception as e:
+        print(f"[全局AI建议错误] {e}")
+        return "暂时无法生成AI建议，请稍后再试。"
+
+@app.route('/getAIAdvice', methods=['POST'])
+def get_ai_advice():
+    """
+    获取AI生成的训练建议
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('userId')
+        
+        if not user_id:
+            return jsonify({
+                "success": False,
+                "error": "缺少用户ID"
+            }), 400
+        
+        # 收集用户训练数据
+        training_data = collect_user_training_data(user_id)
+        
+        # 生成AI建议
+        advice = generate_ai_advice(training_data)
+        
+        return jsonify({
+            "success": True,
+            "advice": advice,
+            "summary": training_data['summary']
+        })
+        
+    except Exception as e:
+        print(f"[获取AI建议错误] {e}")
         return jsonify({
             "success": False,
             "error": str(e)

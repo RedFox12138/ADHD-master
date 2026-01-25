@@ -95,7 +95,8 @@ def sliding_window_split(signal, window_size, step_size):
     return windows
 
 
-def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, output_folder='figures'):
+def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, output_folder='figures', 
+                        save_intermediate_data=False, intermediate_data_folder='毕设画图/预处理各阶段数据'):
     """
     处理单个阶段的信号（静息或注意力）：预处理 + 眼电去除
     :param signal: 输入信号
@@ -104,6 +105,8 @@ def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, o
     :param fs: 采样率(Hz)
     :param visualize: 是否生成可视化图像
     :param output_folder: 图像保存文件夹
+    :param save_intermediate_data: 是否保存预处理各阶段数据
+    :param intermediate_data_folder: 预处理各阶段数据保存文件夹
     :return: 处理后的完整信号（去眼电后）
     """
     if len(signal) == 0:
@@ -113,10 +116,66 @@ def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, o
     print(f"  {stage_name}阶段长度: {len(signal)} 个点 ({len(signal)/fs:.2f}秒)")
     
     try:
-        # 步骤1: 预处理
-        print(f"    -> 正在进行预处理...")
-        processed_signal, _ = preprocess3(signal, fs)
+        # 保存原始数据
+        original_signal = np.copy(signal)
         
+        # 步骤1: 预处理（包括陷波和高低通滤波）
+        print(f"    -> 正在进行预处理...")
+        
+        # 手动执行预处理步骤以保存中间结果
+        from scipy.signal import iirnotch, butter, filtfilt
+        
+        d1 = np.copy(signal)
+        
+        # 1. 50Hz陷波
+        Q = 30
+        b_notch_50, a_notch_50 = iirnotch(50, Q, fs)
+        d1 = filtfilt(b_notch_50, a_notch_50, d1)
+        after_notch_50 = np.copy(d1)
+        
+        # 2. 100Hz陷波
+        b_notch_100, a_notch_100 = iirnotch(100, Q, fs)
+        d1 = filtfilt(b_notch_100, a_notch_100, d1)
+        after_notch_100 = np.copy(d1)
+        
+        # 3. 高通滤波 (0.5Hz)
+        order = 4
+        b_hp, a_hp = butter(order, 0.5, btype='high', fs=fs)
+        d1 = filtfilt(b_hp, a_hp, d1)
+        
+        # 4. 低通滤波 (40Hz)
+        b_lp, a_lp = butter(order, 40, btype='low', fs=fs)
+        d1 = filtfilt(b_lp, a_lp, d1)
+        
+        processed_signal = d1
+        
+        # 保存预处理各阶段数据到mat文件（只保存3个阶段，每个阶段只保存前10秒）
+        if save_intermediate_data:
+            os.makedirs(intermediate_data_folder, exist_ok=True)
+            base_name = os.path.splitext(filename)[0]
+            mat_filename = os.path.join(intermediate_data_folder, 
+                                       f"{base_name}_{stage_name}_preprocessing_stages.mat")
+            
+            # 只保存前10秒的数据以减少存储量
+            max_samples = int(10 * fs)  # 10秒 = 10 * 250 = 2500个点
+            
+            # 截取前10秒（如果信号长度小于10秒，则保存全部）
+            original_save = original_signal[:max_samples].astype(np.float64)
+            after_notch_save = after_notch_100[:max_samples].astype(np.float64)  # 陷波后（50Hz+100Hz）
+            after_bandpass_save = processed_signal[:max_samples].astype(np.float64)  # 陷波+带通
+            
+            save_dict = {
+                'original': original_save,              # 1. 原始数据
+                'after_notch': after_notch_save,        # 2. 陷波后数据（50Hz+100Hz）
+                'after_bandpass': after_bandpass_save,  # 3. 陷波+带通后数据
+                'fs': float(fs)
+            }
+            
+            savemat(mat_filename, save_dict)
+            print(f"    -> 已保存预处理各阶段数据（前10秒）: {mat_filename}")
+            print(f"       - 原始信号: {original_save.shape}")
+            print(f"       - 陷波后: {after_notch_save.shape}")
+            print(f"       - 陷波+带通后: {after_bandpass_save.shape}")
 
         print(f"    -> 正在去除眼电（DATNet无监督网络）...")
         # cleaned_signal = eog_removal_datnet(processed_signal, fs, visualize=False)
@@ -142,7 +201,8 @@ def process_single_stage(signal, stage_name, filename, fs=250, visualize=True, o
 
 
 def process_and_save_mat_file(mat_path, output_folder, fs=250, window_durations=[2, 4, 6, 8], 
-                             step_duration=2, visualize=True, figure_folder='figures'):
+                             step_duration=2, visualize=True, figure_folder='figures',
+                             save_intermediate_data=True, intermediate_data_folder='毕设画图/预处理各阶段数据'):
     """
     处理单个mat文件并保存为同名的新mat文件
     :param mat_path: 输入mat文件路径
@@ -152,6 +212,8 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_durations=
     :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param figure_folder: 图像保存文件夹
+    :param save_intermediate_data: 是否保存预处理各阶段数据
+    :param intermediate_data_folder: 预处理各阶段数据保存文件夹
     :return: 是否成功处理
     """
     # 读取mat文件
@@ -170,11 +232,15 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_durations=
     # 只处理一次预处理和眼电去除（对完整信号）
     print(f"  处理静息阶段...")
     rest_cleaned = process_single_stage(rest_stage, "静息", filename, fs, 
-                                       visualize=visualize, output_folder=figure_folder)
+                                       visualize=visualize, output_folder=figure_folder,
+                                       save_intermediate_data=save_intermediate_data,
+                                       intermediate_data_folder=intermediate_data_folder)
     
     print(f"  处理注意力阶段...")
     attention_cleaned = process_single_stage(attention_stage, "注意力", filename, fs, 
-                                            visualize=visualize, output_folder=figure_folder)
+                                            visualize=visualize, output_folder=figure_folder,
+                                            save_intermediate_data=save_intermediate_data,
+                                            intermediate_data_folder=intermediate_data_folder)
     
     # 保存预处理后的完整信号到根目录
     if rest_cleaned is not None or attention_cleaned is not None:
@@ -248,7 +314,8 @@ def process_and_save_mat_file(mat_path, output_folder, fs=250, window_durations=
 
 def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250, 
                                         window_durations=[2, 4, 6, 8], step_duration=2, 
-                                        visualize=True, figure_folder='figures'):
+                                        visualize=True, figure_folder='figures',
+                                        save_intermediate_data=True, intermediate_data_folder='毕设画图/预处理各阶段数据'):
     """
     批量处理文件夹中的所有mat文件
     每个mat文件单独保存为同名的新mat文件，并按不同窗口大小保存到子目录
@@ -259,6 +326,8 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
     :param step_duration: 步长时长(秒)
     :param visualize: 是否生成可视化图像
     :param figure_folder: 图像保存文件夹
+    :param save_intermediate_data: 是否保存预处理各阶段数据
+    :param intermediate_data_folder: 预处理各阶段数据保存文件夹
     """
     # 确保输出文件夹存在
     os.makedirs(output_folder, exist_ok=True)
@@ -292,7 +361,8 @@ def batch_process_rest_attention_dataset(input_folder, output_folder, fs=250,
         try:
             if process_and_save_mat_file(mat_path, output_folder, fs, 
                                         window_durations, step_duration, 
-                                        visualize, figure_folder):
+                                        visualize, figure_folder,
+                                        save_intermediate_data, intermediate_data_folder):
                 success_count += 1
         except Exception as e:
             print(f"  处理失败: {str(e)}")
@@ -327,6 +397,8 @@ if __name__ == "__main__":
     
     step_duration = 2  # 步长 2秒
     visualize = True  # 可视化标志位: True=生成图像, False=不生成图像
+    save_intermediate_data = True  # 是否保存预处理各阶段数据
+    intermediate_data_folder = 'D:\\Pycharm_Projects\\ADHD-master\\毕设画图\\预处理各阶段数据'  # 预处理各阶段数据保存文件夹
     
     # 批量处理
     batch_process_rest_attention_dataset(
@@ -336,5 +408,7 @@ if __name__ == "__main__":
         window_durations=window_durations,
         step_duration=step_duration,
         visualize=visualize,
-        figure_folder=figure_folder
+        figure_folder=figure_folder,
+        save_intermediate_data=save_intermediate_data,
+        intermediate_data_folder=intermediate_data_folder
     )

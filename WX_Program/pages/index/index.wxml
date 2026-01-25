@@ -27,6 +27,56 @@
     <image class="cover-image" src="/images/游戏封面.png" mode="aspectFit"></image>
   </view>
 
+  <!-- 模式选择界面 -->
+  <view class="mode-selector" wx:if="{{showModeSelector}}">
+    <view class="mode-modal">
+      <view class="mode-title">选择游戏模式</view>
+      <view class="mode-desc">不同模式对应不同的判断逻辑</view>
+      
+      <view class="mode-options">
+        <!-- 自动模式 -->
+        <view class="mode-option auto" bindtap="selectAutoMode">
+          <view class="mode-icon">🤖</view>
+          <view class="mode-name">自动模式</view>
+          <view class="mode-info">
+            需要完成2次离线实验标定
+          </view>
+          <view class="mode-status" wx:if="{{userCalibrated}}">
+            ✅ 已完成标定 ({{calibrationData.user_type}})
+          </view>
+          <view class="mode-status warning" wx:else>
+            ⚠️ 未完成标定
+          </view>
+        </view>
+        
+        <!-- 手动模式 -->
+        <view class="mode-option manual">
+          <view class="mode-icon">✋</view>
+          <view class="mode-name">手动模式</view>
+          <view class="mode-info">
+            手动选择判断逻辑类型
+          </view>
+          
+          <view class="manual-types">
+            <view class="type-btn type-a" bindtap="selectManualMode" data-type="type_A">
+              <view class="type-name">A类</view>
+              <view class="type-desc">适合高活跃型</view>
+            </view>
+            <view class="type-btn type-b" bindtap="selectManualMode" data-type="type_B">
+              <view class="type-name">B类</view>
+              <view class="type-desc">适合低活跃型</view>
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <view class="mode-current" wx:if="{{mode}}">
+        当前模式: {{mode === 'auto' ? '自动' : '手动'}} 
+        ({{userType === 'type_A' ? 'A类' : 'B类'}})
+      </view>
+    </view>
+  </view>
+
   <!-- 难度选择界面 -->
   <view class="difficulty-selector" wx:if="{{showDifficultySelector}}">
     <view class="difficulty-modal">
@@ -57,31 +107,44 @@
 
   <!-- 顶部工具栏 - 固定在顶部 -->
   <view class="top-toolbar">
-    <!-- 左侧：连接状态 -->
-    <view class="status-compact">
-      <text class="status-dot {{connected ? 'dot-connected' : 'dot-disconnected'}}"></text>
-      <text class="status-text">{{connected ? deviceName : '未连接'}}</text>
+    <!-- 状态信息区 -->
+    <view class="status-info-area">
+      <!-- 设备连接状态 -->
+      <view class="status-item">
+        <text class="status-dot {{connected ? 'dot-connected' : 'dot-disconnected'}}"></text>
+        <text class="status-label">设备:</text>
+        <text class="status-value">{{connected ? deviceName : '未连接'}}</text>
+      </view>
+      
+      <!-- 服务器连接状态 -->
+      <view class="status-item">
+        <text class="status-dot {{socketConnected ? 'dot-connected' : 'dot-disconnected'}}"></text>
+        <text class="status-label">服务器:</text>
+        <text class="status-value">{{socketConnected ? '已连接' : (isReconnecting ? '重连中(' + reconnectAttempts + ')' : '未连接')}}</text>
+      </view>
     </view>
     
-    <!-- 中间：服务器状态 -->
-    <view class="server-status-compact">
-      <text class="status-dot {{socketConnected ? 'dot-connected' : 'dot-disconnected'}}"></text>
-      <text class="status-text">{{socketConnected ? '服务器' : (isReconnecting ? '重连(' + reconnectAttempts + ')' : '离线')}}</text>
-    </view>
-    
-    <!-- 右侧：快捷按钮 -->
-    <view class="toolbar-actions">
-      <view class="icon-btn" bindtap="toggleSound">
-        <text class="icon">{{soundEnabled ? '🔊' : '🔇'}}</text>
+    <!-- 功能按钮区 -->
+    <view class="toolbar-buttons">
+      <view class="toolbar-btn" bindtap="toggleSound">
+        <text class="btn-icon">{{soundEnabled ? '🔊' : '🔇'}}</text>
+        <text class="btn-label">{{soundEnabled ? '静音' : '开声'}}</text>
       </view>
-      <view class="icon-btn" bindtap="navigateToScan">
-        <text class="icon">{{connected ? '🔄' : '🔍'}}</text>
+      <view class="toolbar-btn" bindtap="navigateToCalibration">
+        <text class="btn-icon">🎯</text>
+        <text class="btn-label">标定</text>
       </view>
-      <view class="icon-btn" bindtap="toggleDataSending" wx:if="{{connected}}">
-        <text class="icon">{{isDataSending ? '⏹️' : '▶️'}}</text>
+      <view class="toolbar-btn" bindtap="navigateToScan">
+        <text class="btn-icon">{{connected ? '🔄' : '🔍'}}</text>
+        <text class="btn-label">{{connected ? '切换' : '连接'}}</text>
       </view>
-      <view class="icon-btn" bindtap="navigateToHistory">
-        <text class="icon">📊</text>
+      <view class="toolbar-btn" bindtap="toggleDataSending" wx:if="{{connected}}">
+        <text class="btn-icon">{{isDataSending ? '⏹️' : '▶️'}}</text>
+        <text class="btn-label">{{isDataSending ? '停止' : '开始'}}</text>
+      </view>
+      <view class="toolbar-btn" bindtap="navigateToHistory">
+        <text class="btn-icon">📊</text>
+        <text class="btn-label">记录</text>
       </view>
     </view>
   </view>
@@ -142,9 +205,9 @@
     <!-- 注意力进度条 - 游戏顶部 -->
     <view class="attention-progress-bar" wx:if="{{baselineValue !== null}}">
       <view class="attention-progress-bg">
-        <!-- 进度条填充（反向：样本熵越小，进度越高） -->
+        <!-- 进度条填充 -->
         <view class="attention-progress-fill" style="width: {{attentionProgress}}%"></view>
-        <!-- 基准值红线 -->
+        <!-- 基准值标记线 -->
         <view class="baseline-marker" style="left: {{baselineProgress}}%"></view>
       </view>
       <view class="progress-labels">
@@ -333,6 +396,7 @@
       >
         <text class="btn-icon">🚀</text>
         <text class="btn-text">{{socketConnected ? '开始训练' : '等待连接...'}}</text>
+        <text class="btn-hint" wx:if="{{!socketConnected}}">请先连接设备和服务器</text>
       </button>
 
       <button
@@ -345,11 +409,23 @@
       </button>
     </view>
     
-    <!-- 次要操作 -->
+    <!-- 次要操作 - 重新设计布局 -->
     <view class="secondary-actions" wx:if="{{!experimentStarted}}">
-      <view class="action-item" bindtap="navigateToSchulte">
-        <text class="action-icon">🎯</text>
-        <text class="action-label">舒尔特</text>
+      <view class="action-card" bindtap="showModeSelection">
+        <view class="card-header">
+          <text class="card-icon">⚙️</text>
+          <text class="card-title">游戏模式设置</text>
+        </view>
+        <text class="card-desc">{{mode ? (mode === 'auto' ? '当前: 自动模式' : '当前: 手动模式') : '点击选择训练模式'}}</text>
+        <text class="card-status" wx:if="{{mode}}">{{userType === 'type_A' ? 'A类判断逻辑' : 'B类判断逻辑'}}</text>
+      </view>
+      
+      <view class="action-card" bindtap="navigateToSchulte">
+        <view class="card-header">
+          <text class="card-icon">🎯</text>
+          <text class="card-title">舒尔特方格训练</text>
+        </view>
+        <text class="card-desc">专注力基础训练工具</text>
       </view>
     </view>
   </view>
